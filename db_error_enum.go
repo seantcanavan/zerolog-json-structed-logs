@@ -14,6 +14,7 @@ const (
 	ErrDBConstraintViolated EnumDBErrorType = "Constraint Violation"
 	ErrDBDataOutOfRange     EnumDBErrorType = "Data Out of Range"
 	ErrDBDuplicateEntry     EnumDBErrorType = "Duplicate Entry"
+	ErrDBForeignKeyViolated EnumDBErrorType = "Foreign Key Violation"
 	ErrDBInvalidTransaction EnumDBErrorType = "Invalid Transaction"
 	ErrDBQueryInterrupted   EnumDBErrorType = "Query Interrupted"
 	ErrDBRecordNotFound     EnumDBErrorType = "Record Not Found"
@@ -33,6 +34,7 @@ var validDBErrs = map[EnumDBErrorType]struct{}{
 	ErrDBConstraintViolated: {},
 	ErrDBDataOutOfRange:     {},
 	ErrDBDuplicateEntry:     {},
+	ErrDBForeignKeyViolated: {},
 	ErrDBInvalidTransaction: {},
 	ErrDBQueryInterrupted:   {},
 	ErrDBRecordNotFound:     {},
@@ -52,6 +54,7 @@ var dbErrToHTTPStatusMap = map[EnumDBErrorType]int{
 	ErrDBConstraintViolated: http.StatusBadRequest,
 	ErrDBDataOutOfRange:     http.StatusBadRequest,
 	ErrDBDuplicateEntry:     http.StatusConflict,
+	ErrDBForeignKeyViolated: http.StatusConflict,
 	ErrDBInvalidTransaction: http.StatusServiceUnavailable,
 	ErrDBQueryInterrupted:   http.StatusServiceUnavailable,
 	ErrDBRecordNotFound:     http.StatusNotFound,

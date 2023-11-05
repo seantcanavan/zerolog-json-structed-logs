@@ -1,15 +1,16 @@
 package sl
 
 import (
+	"errors"
 	"fmt"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"net/http"
 )
 
-// apiError represents an error that occurred in the API layer of the application.
+// APIError represents an error that occurred in the API layer of the application.
 // It includes details like the HTTP status code and additional context.
-type apiError struct {
+type APIError struct {
 	APIEndpoint   string `json:"apiEndpoint,omitempty"`
 	CallerID      string `json:"callerId"`
 	InternalError error  `json:"internalError,omitempty"` // An internal error if it exists such as twilio.SendSMS or other integrations
@@ -22,17 +23,17 @@ type apiError struct {
 	execContext `json:"execContext"` // Embedded struct
 }
 
-// Error returns the string representation of the apiError.
-func (e *apiError) Error() string {
-	return fmt.Sprintf("[apiError] %d - %s at %s: %s", e.StatusCode, e.Message, e.APIEndpoint, e.InternalError)
+// Error returns the string representation of the APIError.
+func (e *APIError) Error() string {
+	return fmt.Sprintf("[APIError] %d - %s at %s: %s", e.StatusCode, e.Message, e.APIEndpoint, e.InternalError)
 }
 
 // Unwrap provides the underlying error for use with errors.Is and errors.As functions.
-func (e *apiError) Unwrap() error {
+func (e *APIError) Unwrap() error {
 	return e.InternalError
 }
 
-// NewAPIErr is required because we have to json.Marshal apiError so execContext needs
+// NewAPIErr is required because we have to json.Marshal APIError so execContext needs
 // to be public however we don't want users to have to provide that
 type NewAPIErr struct {
 	APIEndpoint   string `json:"apiEndpoint,omitempty"`
@@ -49,7 +50,7 @@ func LogNewAPIErr(newAPIErr NewAPIErr) error {
 		newAPIErr.Message = "An API error occurred"
 	}
 
-	apiErr := apiError{
+	apiErr := APIError{
 		APIEndpoint:   newAPIErr.APIEndpoint,
 		CallerID:      newAPIErr.CallerID,
 		InternalError: fmt.Errorf("wrapping error %w", newAPIErr.InternalError),
@@ -69,8 +70,8 @@ func LogNewAPIErr(newAPIErr NewAPIErr) error {
 	return &apiErr
 }
 
-// MarshalZerologObject allows apiError to be logged by zerolog.
-func (e *apiError) MarshalZerologObject(zle *zerolog.Event) {
+// MarshalZerologObject allows APIError to be logged by zerolog.
+func (e *APIError) MarshalZerologObject(zle *zerolog.Event) {
 	zle.
 		Int("line", e.Line).
 		Int("statusCode", e.StatusCode).
@@ -85,4 +86,29 @@ func (e *apiError) MarshalZerologObject(zle *zerolog.Event) {
 	if e.InternalError != nil {
 		zle.AnErr("internalError", e.InternalError)
 	}
+}
+
+// FindOutermostAPIError returns the final APIError in the error chain.
+func FindOutermostAPIError(err error) *APIError {
+	res := FindAPIErrors(err)
+	if len(res) > 0 {
+		return res[0]
+	}
+
+	return nil
+}
+
+// FindAPIErrors returns a slice of all APIError found in the error chain.
+func FindAPIErrors(err error) []*APIError {
+	var errs []*APIError
+	for {
+		var apiErr *APIError
+		if errors.As(err, &apiErr) {
+			errs = append(errs, apiErr)
+		}
+		if err = errors.Unwrap(err); err == nil {
+			break
+		}
+	}
+	return errs
 }

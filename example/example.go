@@ -8,7 +8,7 @@ import (
 )
 
 func wrapDatabaseError() error {
-	newDBErr := sl.LogNewDBErr(sl.NewDBErr{ // Call LogNewDBErr to log the error to the temp file
+	newDBErr := sl.LogNewDBErr(sl.NewDBErr{ // Call LogNewDBErr to log the DB error to the temp file
 		Constraint:    "pk_users",
 		DBName:        "testdb",
 		InternalError: errors.New("sql: no rows in result set"),
@@ -21,7 +21,7 @@ func wrapDatabaseError() error {
 
 	code := sl.ErrDBConnectionFailed.HTTPStatus()
 
-	return sl.LogNewAPIErr(sl.NewAPIErr{
+	return sl.LogNewAPIErr(sl.NewAPIErr{ // call LogNewAPIErr to log the API error to the temp file
 		APIEndpoint:   "/test/endpoint",
 		CallerID:      "caller-123",
 		InternalError: newDBErr,

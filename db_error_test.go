@@ -80,15 +80,15 @@ func tearDownDatabaseFileLogger() {
 }
 
 func TestDBError_Error(t *testing.T) {
-	expectedDBErr := databaseError{
+	expectedDBErr := DatabaseError{
 		// Assume these values are what you expect to see after the operation.
-		Constraint:    "pk_users",
-		DBName:        "testdb",
-		InternalError: errors.New("sql: no rows in result set"),
-		Message:       "no users found",
-		Operation:     "SELECT",
-		Query:         "SELECT * FROM users",
-		TableName:     "users",
+		Constraint:    "Constraint",
+		DBName:        "DBName",
+		InternalError: errors.New("InternalError"),
+		Message:       "Message",
+		Operation:     "Operation",
+		Query:         "Query",
+		TableName:     "TableName",
 		Type:          ErrDBConnectionFailed,
 
 		// we have to wrap this so the call stack is at the same depth as LogNewDBErr below
@@ -97,7 +97,7 @@ func TestDBError_Error(t *testing.T) {
 
 	errString := expectedDBErr.Error()
 
-	expectedString := "[databaseError] SELECT operation on testdb.users with query: SELECT * FROM users - no users found - sql: no rows in result set"
+	expectedString := "[DatabaseError] Operation operation on DBName.TableName with query: Query - Message - InternalError"
 
 	assert.Equal(t, expectedString, errString)
 }
@@ -109,11 +109,11 @@ func TestLogNewDBErr(t *testing.T) {
 	// this gets propagated up to the LogItem
 	message := "no users found"
 
-	expectedDBErr := databaseError{
+	expectedDBErr := DatabaseError{
 		// Assume these values are what you expect to see after the operation.
 		Constraint:    "pk_users",
 		DBName:        "testdb",
-		InternalError: errors.New("sql: no rows in result set"),
+		InternalError: fmt.Errorf("wrapping error %w", errors.New("sql: no rows in result set")),
 		Message:       message,
 		Operation:     "SELECT",
 		Query:         "SELECT * FROM users",
@@ -127,7 +127,7 @@ func TestLogNewDBErr(t *testing.T) {
 	newDBErr := LogNewDBErr(NewDBErr{ // Call LogNewDBErr to log the error to the temp file
 		Constraint:    expectedDBErr.Constraint,
 		DBName:        expectedDBErr.DBName,
-		InternalError: expectedDBErr.InternalError,
+		InternalError: errors.New("sql: no rows in result set"),
 		Message:       expectedDBErr.Message,
 		Operation:     expectedDBErr.Operation,
 		Query:         expectedDBErr.Query,
@@ -139,9 +139,9 @@ func TestLogNewDBErr(t *testing.T) {
 	require.NoError(t, DBLogFile.Sync())
 	require.NoError(t, DBLogFile.Close())
 
-	// Use errors.As to unwrap the error and verify that newDBErr is of type *databaseError
-	var unwrappedNewDBErr *databaseError
-	require.True(t, errors.As(newDBErr, &unwrappedNewDBErr), "Error is not of type *databaseError")
+	// Use errors.As to unwrap the error and verify that newDBErr is of type *DatabaseError
+	var unwrappedNewDBErr *DatabaseError
+	require.True(t, errors.As(newDBErr, &unwrappedNewDBErr), "Error is not of type *DatabaseError")
 
 	t.Run("verify unwrappedNewDBErr has all of its fields set correctly", func(t *testing.T) {
 		assert.Equal(t, expectedDBErr.Constraint, unwrappedNewDBErr.Constraint)
@@ -178,7 +178,7 @@ func TestLogNewDBErr(t *testing.T) {
 			assert.Equal(t, unwrappedNewDBErr.DBName, zeroLogJSONItem.ErrorAsJSON["dbName"])
 			assert.Equal(t, unwrappedNewDBErr.File, zeroLogJSONItem.ErrorAsJSON["file"])
 			assert.Equal(t, unwrappedNewDBErr.Function, zeroLogJSONItem.ErrorAsJSON["function"])
-			assert.Equal(t, unwrappedNewDBErr.InternalError.Error(), zeroLogJSONItem.ErrorAsJSON["internalError"]) // this is the original, top level error that databaseError wrapped such as a SQLError
+			assert.Equal(t, unwrappedNewDBErr.InternalError.Error(), zeroLogJSONItem.ErrorAsJSON["internalError"]) // this is the original, top level error that DatabaseError wrapped such as a SQLError
 			assert.Equal(t, float64(unwrappedNewDBErr.Line), zeroLogJSONItem.ErrorAsJSON["line"])                  // you get a float64 when unmarshalling a number into interface{} for safety
 			assert.Equal(t, unwrappedNewDBErr.Message, zeroLogJSONItem.ErrorAsJSON["message"])
 			assert.Equal(t, unwrappedNewDBErr.Operation, zeroLogJSONItem.ErrorAsJSON["operation"])
@@ -200,7 +200,7 @@ func TestLogNewDBErr(t *testing.T) {
 				assert.Equal(t, unwrappedNewDBErr.DBName, dbErrEntryLogValues["dbName"])
 				assert.Equal(t, unwrappedNewDBErr.File, dbErrEntryLogValues["file"])
 				assert.Equal(t, unwrappedNewDBErr.Function, dbErrEntryLogValues["function"])
-				assert.Equal(t, unwrappedNewDBErr.InternalError.Error(), dbErrEntryLogValues["internalError"]) // this is the original, top level error that databaseError wrapped such as a SQLError
+				assert.Equal(t, unwrappedNewDBErr.InternalError.Error(), dbErrEntryLogValues["internalError"]) // this is the original, top level error that DatabaseError wrapped such as a SQLError
 				assert.Equal(t, float64(unwrappedNewDBErr.Line), dbErrEntryLogValues["line"])                  // you get a float64 when unmarshalling a number into interface{} for safety
 				assert.Equal(t, unwrappedNewDBErr.Message, dbErrEntryLogValues["message"])
 				assert.Equal(t, unwrappedNewDBErr.Operation, dbErrEntryLogValues["operation"])
@@ -213,4 +213,66 @@ func TestLogNewDBErr(t *testing.T) {
 			})
 		})
 	})
+}
+
+func TestFindLastDatabaseError(t *testing.T) {
+	firstError := LogNewDBErr(NewDBErr{
+		Constraint:    "pk_users_id",
+		DBName:        "usersdb",
+		InternalError: fmt.Errorf("primary key violation"),
+		Message:       "duplicate entry for primary key",
+		Operation:     "INSERT",
+		Query:         "INSERT INTO users (id, name) VALUES (1, 'John Doe')",
+		TableName:     "users",
+		Type:          ErrDBConstraintViolated,
+	})
+
+	secondError := LogNewDBErr(NewDBErr{
+		Constraint:    "fk_orders_user_id",
+		DBName:        "ordersdb",
+		InternalError: firstError,
+		Message:       "invalid foreign key",
+		Operation:     "UPDATE",
+		Query:         "UPDATE orders SET user_id = 2 WHERE order_id = 99",
+		TableName:     "orders",
+		Type:          ErrDBForeignKeyViolated,
+	})
+
+	// Test
+	outermostErr := FindOutermostDatabaseError(secondError)
+	require.NotNil(t, outermostErr)
+
+	// Unwrap the error to assert on the last database error in the chain
+	var outermostDBErr *DatabaseError
+	require.True(t, errors.As(outermostErr, &outermostDBErr))
+
+	var secondErrorUnwrapped *DatabaseError
+	require.True(t, errors.As(outermostErr, &secondErrorUnwrapped))
+
+	var firstErrorUnwrapped *DatabaseError
+	require.True(t, errors.As(secondErrorUnwrapped.InternalError, &firstErrorUnwrapped))
+
+	// Compare the outermost error returned to the second error defined
+	assert.Equal(t, secondErrorUnwrapped.Constraint, outermostDBErr.Constraint)
+	assert.Equal(t, secondErrorUnwrapped.DBName, outermostDBErr.DBName)
+	assert.Equal(t, secondErrorUnwrapped.File, outermostDBErr.File)
+	assert.Equal(t, secondErrorUnwrapped.Function, outermostDBErr.Function)
+	assert.Equal(t, secondErrorUnwrapped.Line, outermostDBErr.Line)
+	assert.Equal(t, secondErrorUnwrapped.Message, outermostDBErr.Message)
+	assert.Equal(t, secondErrorUnwrapped.Operation, outermostDBErr.Operation)
+	assert.Equal(t, secondErrorUnwrapped.Query, outermostDBErr.Query)
+	assert.Equal(t, secondErrorUnwrapped.TableName, outermostDBErr.TableName)
+	assert.Equal(t, secondErrorUnwrapped.Type, outermostDBErr.Type)
+
+	// Compare the error wrapped by the outermost error to the first error defined
+	assert.Equal(t, firstErrorUnwrapped.Constraint, firstErrorUnwrapped.Constraint)
+	assert.Equal(t, firstErrorUnwrapped.DBName, firstErrorUnwrapped.DBName)
+	assert.Equal(t, firstErrorUnwrapped.File, firstErrorUnwrapped.File)
+	assert.Equal(t, firstErrorUnwrapped.Function, firstErrorUnwrapped.Function)
+	assert.Equal(t, firstErrorUnwrapped.Line, firstErrorUnwrapped.Line)
+	assert.Equal(t, firstErrorUnwrapped.Message, firstErrorUnwrapped.Message)
+	assert.Equal(t, firstErrorUnwrapped.Operation, firstErrorUnwrapped.Operation)
+	assert.Equal(t, firstErrorUnwrapped.Query, firstErrorUnwrapped.Query)
+	assert.Equal(t, firstErrorUnwrapped.TableName, firstErrorUnwrapped.TableName)
+	assert.Equal(t, firstErrorUnwrapped.Type, firstErrorUnwrapped.Type)
 }

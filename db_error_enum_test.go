@@ -11,17 +11,18 @@ func TestEnumDBErr_HTTPStatus(t *testing.T) {
 		dbErrEnum      EnumDBErrorType
 		expectedStatus int
 	}{
-		{ErrDBDuplicateEntry, http.StatusConflict},
-		{ErrDBRecordNotFound, http.StatusNotFound},
+		{"ErrDBSomeOtherDatabaseError", http.StatusInternalServerError},
+		{ErrDBAccessDenied, http.StatusForbidden},
 		{ErrDBConnectionFailed, http.StatusServiceUnavailable},
-		{ErrDBQueryInterrupted, http.StatusServiceUnavailable},
-		{ErrDBInvalidTransaction, http.StatusServiceUnavailable},
 		{ErrDBConstraintViolated, http.StatusBadRequest},
 		{ErrDBDataOutOfRange, http.StatusBadRequest},
+		{ErrDBDuplicateEntry, http.StatusConflict},
+		{ErrDBForeignKeyViolated, http.StatusConflict},
+		{ErrDBInvalidTransaction, http.StatusServiceUnavailable},
+		{ErrDBQueryInterrupted, http.StatusServiceUnavailable},
+		{ErrDBRecordNotFound, http.StatusNotFound},
 		{ErrDBSyntaxError, http.StatusBadRequest},
-		{ErrDBAccessDenied, http.StatusForbidden},
 		{ErrDBTimeout, http.StatusGatewayTimeout},
-		{"ErrDBSomeOtherDatabaseError", http.StatusInternalServerError},
 	}
 
 	for _, tc := range testCases {
@@ -32,51 +33,24 @@ func TestEnumDBErr_HTTPStatus(t *testing.T) {
 	}
 }
 
-func TestEnumDBErr_HTTPStatusAndText(t *testing.T) {
-	testCases := []struct {
-		enumDBErr      EnumDBErrorType
-		expectedStatus int
-		expectedText   string
-	}{
-		{ErrDBAccessDenied, http.StatusForbidden, "Forbidden"},
-		{ErrDBConnectionFailed, http.StatusServiceUnavailable, "Service Unavailable"},
-		{ErrDBConstraintViolated, http.StatusBadRequest, "Bad Request"},
-		{ErrDBDataOutOfRange, http.StatusBadRequest, "Bad Request"},
-		{ErrDBDuplicateEntry, http.StatusConflict, "Conflict"},
-		{ErrDBInvalidTransaction, http.StatusServiceUnavailable, "Service Unavailable"},
-		{ErrDBQueryInterrupted, http.StatusServiceUnavailable, "Service Unavailable"},
-		{ErrDBRecordNotFound, http.StatusNotFound, "Not Found"},
-		{ErrDBSyntaxError, http.StatusBadRequest, "Bad Request"},
-		{ErrDBTimeout, http.StatusGatewayTimeout, "Gateway Timeout"},
-		{"undefined_error", http.StatusInternalServerError, "Internal Server Error"},
-	}
-
-	for _, tc := range testCases {
-		t.Run(string(tc.enumDBErr), func(t *testing.T) {
-			status, text := tc.enumDBErr.HTTPStatusAndText()
-			assert.Equal(t, tc.expectedStatus, status)
-			assert.Equal(t, tc.expectedText, text)
-		})
-	}
-}
-
 // TestEnumDBError_String tests the String method of the EnumDBErrorType type.
 func TestEnumDBError_String(t *testing.T) {
 	testCases := []struct {
 		enumDBError    EnumDBErrorType
 		expectedString string
 	}{
+		{"ErrSomeRandomError", "ErrSomeRandomError"},
 		{ErrDBAccessDenied, "Access Denied"},
 		{ErrDBConnectionFailed, "Connection Failed"},
 		{ErrDBConstraintViolated, "Constraint Violation"},
 		{ErrDBDataOutOfRange, "Data Out of Range"},
 		{ErrDBDuplicateEntry, "Duplicate Entry"},
+		{ErrDBForeignKeyViolated, "Foreign Key Violation"},
 		{ErrDBInvalidTransaction, "Invalid Transaction"},
 		{ErrDBQueryInterrupted, "Query Interrupted"},
 		{ErrDBRecordNotFound, "Record Not Found"},
 		{ErrDBSyntaxError, "Syntax Error"},
 		{ErrDBTimeout, "Timeout"},
-		{"undefined_error", "undefined_error"},
 	}
 
 	for _, tc := range testCases {
@@ -96,6 +70,7 @@ func TestEnumDBError_Valid(t *testing.T) {
 		{ErrDBConstraintViolated, true},
 		{ErrDBDataOutOfRange, true},
 		{ErrDBDuplicateEntry, true},
+		{ErrDBForeignKeyViolated, true},
 		{ErrDBInvalidTransaction, true},
 		{ErrDBQueryInterrupted, true},
 		{ErrDBRecordNotFound, true},

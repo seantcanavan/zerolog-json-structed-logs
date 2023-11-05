@@ -1,14 +1,15 @@
 package sl
 
 import (
+	"errors"
 	"fmt"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
-// databaseError represents an error that occurred in the database layer of the application.
+// DatabaseError represents an error that occurred in the database layer of the application.
 // It includes details that might be relevant for debugging database issues.
-type databaseError struct {
+type DatabaseError struct {
 	Constraint    string          `json:"constraint,omitempty"`
 	DBName        string          `json:"dbName,omitempty"`
 	InternalError error           `json:"internalError,omitempty"` // An internal error if it exists such as a SQL library Error
@@ -21,18 +22,18 @@ type databaseError struct {
 	execContext `json:"execContext,omitempty"` // Embedded struct
 }
 
-// Error returns the string representation of the databaseError.
-func (e *databaseError) Error() string {
-	return fmt.Sprintf("[databaseError] %s operation on %s.%s with query: %s - %s - %v",
+// Error returns the string representation of the DatabaseError.
+func (e *DatabaseError) Error() string {
+	return fmt.Sprintf("[DatabaseError] %s operation on %s.%s with query: %s - %s - %v",
 		e.Operation, e.DBName, e.TableName, e.Query, e.Message, e.InternalError)
 }
 
 // Unwrap provides the underlying error for use with errors.Is and errors.As functions.
-func (e *databaseError) Unwrap() error {
+func (e *DatabaseError) Unwrap() error {
 	return e.InternalError
 }
 
-// NewDBErr is required because we have to json.Marshal databaseError so execContext needs
+// NewDBErr is required because we have to json.Marshal DatabaseError so execContext needs
 // to be public however we don't want users to have to provide that
 type NewDBErr struct {
 	Constraint    string          `json:"constraint,omitempty"`
@@ -50,7 +51,7 @@ func LogNewDBErr(newDBErr NewDBErr) error {
 		newDBErr.Message = "A database error occurred"
 	}
 
-	dbErr := databaseError{
+	dbErr := DatabaseError{
 		Constraint:    newDBErr.Constraint,
 		DBName:        newDBErr.DBName,
 		InternalError: fmt.Errorf("wrapping error %w", newDBErr.InternalError),
@@ -70,8 +71,8 @@ func LogNewDBErr(newDBErr NewDBErr) error {
 	return &dbErr
 }
 
-// MarshalZerologObject allows databaseError to be logged by zerolog.
-func (e *databaseError) MarshalZerologObject(zle *zerolog.Event) {
+// MarshalZerologObject allows DatabaseError to be logged by zerolog.
+func (e *DatabaseError) MarshalZerologObject(zle *zerolog.Event) {
 	zle.
 		Int("line", e.Line).
 		Str("constraint", e.Constraint).
@@ -87,4 +88,29 @@ func (e *databaseError) MarshalZerologObject(zle *zerolog.Event) {
 	if e.InternalError != nil {
 		zle.AnErr("internalError", e.InternalError)
 	}
+}
+
+// FindOutermostDatabaseError returns the final APIError in the error chain.
+func FindOutermostDatabaseError(err error) *DatabaseError {
+	res := FindDatabaseErrors(err)
+	if len(res) > 0 {
+		return res[0]
+	}
+
+	return nil
+}
+
+// FindDatabaseErrors returns a slice of all APIError found in the error chain.
+func FindDatabaseErrors(err error) []*DatabaseError {
+	var errs []*DatabaseError
+	for {
+		var dbErr *DatabaseError
+		if errors.As(err, &dbErr) {
+			errs = append(errs, dbErr)
+		}
+		if err = errors.Unwrap(err); err == nil {
+			break
+		}
+	}
+	return errs
 }

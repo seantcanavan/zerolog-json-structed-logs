@@ -54,21 +54,21 @@ func tearDownAPIFileLogger() {
 
 func TestAPIError_Error(t *testing.T) {
 	// Set up fake values for the expected API error
-	expectedAPIError := apiError{
-		APIEndpoint:   "/test/endpoint",
-		CallerID:      "caller123",
-		InternalError: errors.New("internal server error"),
-		Message:       "An error occurred",
-		RequestID:     "req-123",
+	expectedAPIError := APIError{
+		APIEndpoint:   "APIEndpoint",
+		CallerID:      "CallerID",
+		InternalError: errors.New("InternalError"),
+		Message:       "Message",
+		RequestID:     "RequestID",
 		StatusCode:    500,
-		UserID:        "user123",
+		UserID:        "UserID",
 		execContext:   func() execContext { return getExecContext() }(),
 	}
 
 	// Define the expected string output from the Error() method
-	expectedString := "[apiError] 500 - An error occurred at /test/endpoint: internal server error"
+	expectedString := "[APIError] 500 - Message at APIEndpoint: InternalError"
 
-	// Get the actual error string from the apiError instance
+	// Get the actual error string from the APIError instance
 	errString := expectedAPIError.Error()
 
 	// Assert that the expected string matches the actual error string
@@ -82,10 +82,10 @@ func TestLogNewAPIErr(t *testing.T) {
 	// this gets propagated up to the LogItem
 	message := "time.Parse failed"
 
-	expectedAPIErr := apiError{
+	expectedAPIErr := APIError{
 		APIEndpoint:   "/test/endpoint",
 		CallerID:      "caller-123",
-		InternalError: errors.New("internal server error"),
+		InternalError: fmt.Errorf("wrapping error %w", errors.New("internal server error")),
 		Message:       message,
 		RequestID:     "req-123",
 		StatusCode:    http.StatusTeapot,
@@ -98,7 +98,7 @@ func TestLogNewAPIErr(t *testing.T) {
 	newAPIErr := LogNewAPIErr(NewAPIErr{
 		APIEndpoint:   expectedAPIErr.APIEndpoint,
 		CallerID:      expectedAPIErr.CallerID,
-		InternalError: expectedAPIErr.InternalError,
+		InternalError: errors.New("internal server error"),
 		Message:       expectedAPIErr.Message,
 		RequestID:     expectedAPIErr.RequestID,
 		StatusCode:    expectedAPIErr.StatusCode,
@@ -109,9 +109,9 @@ func TestLogNewAPIErr(t *testing.T) {
 	require.NoError(t, APILogFile.Sync())
 	require.NoError(t, APILogFile.Close())
 
-	// Use errors.As to unwrap the error and verify that newAPIErr is of type *apiError
-	var unwrappedAPIErr *apiError
-	require.True(t, errors.As(newAPIErr, &unwrappedAPIErr), "Error is not of type *apiError")
+	// Use errors.As to unwrap the error and verify that newAPIErr is of type *APIError
+	var unwrappedAPIErr *APIError
+	require.True(t, errors.As(newAPIErr, &unwrappedAPIErr), "Error is not of type *APIError")
 
 	t.Run("verify unwrappedAPIErr has all of its fields set correctly", func(t *testing.T) {
 		assert.Equal(t, expectedAPIErr.APIEndpoint, unwrappedAPIErr.APIEndpoint)
@@ -147,7 +147,7 @@ func TestLogNewAPIErr(t *testing.T) {
 			assert.Equal(t, unwrappedAPIErr.CallerID, zeroLogJSONItem.ErrorAsJSON["callerId"])
 			assert.Equal(t, unwrappedAPIErr.File, zeroLogJSONItem.ErrorAsJSON["file"])
 			assert.Equal(t, unwrappedAPIErr.Function, zeroLogJSONItem.ErrorAsJSON["function"])
-			assert.Equal(t, unwrappedAPIErr.InternalError.Error(), zeroLogJSONItem.ErrorAsJSON["internalError"]) // this is the original, top level error that databaseError wrapped such as a SQLError
+			assert.Equal(t, unwrappedAPIErr.InternalError.Error(), zeroLogJSONItem.ErrorAsJSON["internalError"]) // this is the original, top level error that DatabaseError wrapped such as a SQLError
 			assert.Equal(t, float64(unwrappedAPIErr.Line), zeroLogJSONItem.ErrorAsJSON["line"])                  // you get a float64 when unmarshalling a number into interface{} for safety
 			assert.Equal(t, unwrappedAPIErr.Message, zeroLogJSONItem.ErrorAsJSON["message"])
 			assert.Equal(t, unwrappedAPIErr.RequestID, zeroLogJSONItem.ErrorAsJSON["requestId"])
@@ -169,7 +169,7 @@ func TestLogNewAPIErr(t *testing.T) {
 				assert.Equal(t, unwrappedAPIErr.CallerID, apiErrEntryLogValues["callerId"])
 				assert.Equal(t, unwrappedAPIErr.File, apiErrEntryLogValues["file"])
 				assert.Equal(t, unwrappedAPIErr.Function, apiErrEntryLogValues["function"])
-				assert.Equal(t, unwrappedAPIErr.InternalError.Error(), apiErrEntryLogValues["internalError"]) // this is the original, top level error that databaseError wrapped such as a SQLError
+				assert.Equal(t, unwrappedAPIErr.InternalError.Error(), apiErrEntryLogValues["internalError"]) // this is the original, top level error that DatabaseError wrapped such as a SQLError
 				assert.Equal(t, float64(unwrappedAPIErr.Line), apiErrEntryLogValues["line"])                  // you get a float64 when unmarshalling a number into interface{} for safety
 				assert.Equal(t, unwrappedAPIErr.Message, apiErrEntryLogValues["message"])
 				assert.Equal(t, unwrappedAPIErr.RequestID, apiErrEntryLogValues["requestId"])
