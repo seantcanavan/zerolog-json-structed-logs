@@ -18,7 +18,7 @@ type databaseError struct {
 	TableName     string          `json:"tableName,omitempty"`
 	Type          EnumDBErrorType `json:"type,omitempty"`
 
-	ExecContext `json:"execContext,omitempty"` // Embedded struct
+	execContext `json:"execContext,omitempty"` // Embedded struct
 }
 
 // Error returns the string representation of the databaseError.
@@ -32,17 +32,17 @@ func (e *databaseError) Unwrap() error {
 	return e.InternalError
 }
 
-// NewDBErr is required because we have to json.Marshal databaseError so ExecContext needs
+// NewDBErr is required because we have to json.Marshal databaseError so execContext needs
 // to be public however we don't want users to have to provide that
 type NewDBErr struct {
-	Constraint  string          `json:"constraint,omitempty"`
-	DBName      string          `json:"dbName,omitempty"`
-	InternalErr error           `json:"internalError,omitempty"` // An internal error if it exists such as a SQL library Error
-	Message     string          `json:"message,omitempty"`
-	Operation   string          `json:"operation,omitempty"`
-	Query       string          `json:"query,omitempty"`
-	TableName   string          `json:"tableName,omitempty"`
-	Type        EnumDBErrorType `json:"type,omitempty"`
+	Constraint    string          `json:"constraint,omitempty"`
+	DBName        string          `json:"dbName,omitempty"`
+	InternalError error           `json:"internalError,omitempty"` // An internal error if it exists such as a SQL library Error
+	Message       string          `json:"message,omitempty"`
+	Operation     string          `json:"operation,omitempty"`
+	Query         string          `json:"query,omitempty"`
+	TableName     string          `json:"tableName,omitempty"`
+	Type          EnumDBErrorType `json:"type,omitempty"`
 }
 
 func LogNewDBErr(newDBErr NewDBErr) error {
@@ -53,14 +53,14 @@ func LogNewDBErr(newDBErr NewDBErr) error {
 	dbErr := databaseError{
 		Constraint:    newDBErr.Constraint,
 		DBName:        newDBErr.DBName,
-		InternalError: newDBErr.InternalErr,
+		InternalError: fmt.Errorf("wrapping error %w", newDBErr.InternalError),
 		Message:       newDBErr.Message,
 		Operation:     newDBErr.Operation,
 		Query:         newDBErr.Query,
 		TableName:     newDBErr.TableName,
 		Type:          newDBErr.Type,
 
-		ExecContext: getExecContext(),
+		execContext: getExecContext(),
 	}
 
 	log.Error().

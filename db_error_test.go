@@ -14,9 +14,11 @@ import (
 	"time"
 )
 
-const TempFileName = "testlog"
+const TempFileNameDBLogs = "testdblogs"
+const TempFileNameAPILogs = "testapilogs"
 
-var LogFile *os.File // zerolog writes to this file so we can capture the output
+var APILogFile *os.File // zerolog writes to this file so we can capture the output
+var DBLogFile *os.File  // zerolog writes to this file so we can capture the output
 
 // generate a new, random Now every execution. This helps test more permutations of dates and edge cases
 var staticNow = func() time.Time {
@@ -39,12 +41,12 @@ func staticNowFunc() time.Time {
 	return staticNow
 }
 
-func setupFileLogger() {
-	// have to declare this here to prevent shadowing the outer LogFile with :=
+func setupDBErrorFileLogger() {
+	// have to declare this here to prevent shadowing the outer DBLogFile with :=
 	var err error
 
-	if _, err = os.Stat(TempFileName); err == nil {
-		err = os.Remove(TempFileName)
+	if _, err = os.Stat(TempFileNameDBLogs); err == nil {
+		err = os.Remove(TempFileNameDBLogs)
 		if err != nil {
 			panic(fmt.Sprintf("Could not remove existing temp file: %s", err))
 		}
@@ -54,7 +56,7 @@ func setupFileLogger() {
 		panic(fmt.Sprintf("Error checking for temp file existence: %s", err))
 	}
 
-	LogFile, err = os.CreateTemp("", TempFileName)
+	DBLogFile, err = os.CreateTemp("", TempFileNameDBLogs)
 	if err != nil {
 		panic(fmt.Sprintf("err is not nil: %s", err))
 	}
@@ -66,18 +68,12 @@ func setupFileLogger() {
 	zerolog.TimestampFunc = staticNowFunc
 
 	// Configure zerolog to write to the temp file so we can easily capture the output
-	log.Logger = zerolog.New(LogFile).With().Timestamp().Logger()
+	log.Logger = zerolog.New(DBLogFile).With().Timestamp().Logger()
 	zerolog.DisableSampling(true)
 }
 
-func TestMain(m *testing.M) {
-	setupFileLogger()
-	m.Run()
-	tearDownFileLogger()
-}
-
-func tearDownFileLogger() {
-	err := os.Remove(LogFile.Name())
+func tearDownDatabaseFileLogger() {
+	err := os.Remove(DBLogFile.Name())
 	if err != nil {
 		panic(fmt.Sprintf("err is not nil: %s", err))
 	}
@@ -96,7 +92,7 @@ func TestDBError_Error(t *testing.T) {
 		Type:          ErrDBConnectionFailed,
 
 		// we have to wrap this so the call stack is at the same depth as LogNewDBErr below
-		ExecContext: func() ExecContext { return getExecContext() }(),
+		execContext: func() execContext { return getExecContext() }(),
 	}
 
 	errString := expectedDBErr.Error()
@@ -107,6 +103,9 @@ func TestDBError_Error(t *testing.T) {
 }
 
 func TestLogNewDBErr(t *testing.T) {
+	setupDBErrorFileLogger()
+	defer tearDownDatabaseFileLogger()
+
 	// this gets propagated up to the LogItem
 	message := "no users found"
 
@@ -122,23 +121,23 @@ func TestLogNewDBErr(t *testing.T) {
 		Type:          ErrDBConnectionFailed,
 
 		// we have to wrap this so the call stack is at the same depth as LogNewDBErr below
-		ExecContext: func() ExecContext { return getExecContext() }(),
+		execContext: func() execContext { return getExecContext() }(),
 	}
 
 	newDBErr := LogNewDBErr(NewDBErr{ // Call LogNewDBErr to log the error to the temp file
-		Constraint:  expectedDBErr.Constraint,
-		DBName:      expectedDBErr.DBName,
-		InternalErr: expectedDBErr.InternalError,
-		Message:     expectedDBErr.Message,
-		Operation:   expectedDBErr.Operation,
-		Query:       expectedDBErr.Query,
-		TableName:   expectedDBErr.TableName,
-		Type:        expectedDBErr.Type,
+		Constraint:    expectedDBErr.Constraint,
+		DBName:        expectedDBErr.DBName,
+		InternalError: expectedDBErr.InternalError,
+		Message:       expectedDBErr.Message,
+		Operation:     expectedDBErr.Operation,
+		Query:         expectedDBErr.Query,
+		TableName:     expectedDBErr.TableName,
+		Type:          expectedDBErr.Type,
 	})
 
 	// Make sure to sync and close the log file to ensure all log entries are written.
-	require.NoError(t, LogFile.Sync())
-	require.NoError(t, LogFile.Close())
+	require.NoError(t, DBLogFile.Sync())
+	require.NoError(t, DBLogFile.Close())
 
 	// Use errors.As to unwrap the error and verify that newDBErr is of type *databaseError
 	var unwrappedNewDBErr *databaseError
@@ -161,7 +160,7 @@ func TestLogNewDBErr(t *testing.T) {
 
 	t.Run("verify that jsonLogContents is well formed", func(t *testing.T) {
 		// Read the log file's logFileJSONContents for assertion.
-		logFileJSONContents, err := os.ReadFile(LogFile.Name())
+		logFileJSONContents, err := os.ReadFile(DBLogFile.Name())
 		require.NoError(t, err)
 
 		// Unmarshal logFileJSONContents into a generic map[string]any
@@ -214,5 +213,4 @@ func TestLogNewDBErr(t *testing.T) {
 			})
 		})
 	})
-
 }

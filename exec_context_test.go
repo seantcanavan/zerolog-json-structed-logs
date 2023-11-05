@@ -20,6 +20,6 @@ func TestGetExecContext(t *testing.T) {
 
 // this wraps GetExecContext() to the correct depth to get the stack trace of the caller,
 // not the stack trace for the go standard library (caller - 1)
-func testCaller() ExecContext {
+func testCaller() execContext {
 	return getExecContext()
 }

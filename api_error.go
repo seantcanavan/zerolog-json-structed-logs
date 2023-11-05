@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"net/http"
 )
 
 // apiError represents an error that occurred in the API layer of the application.
@@ -15,9 +16,10 @@ type apiError struct {
 	Message       string `json:"message"`
 	RequestID     string `json:"requestId"`
 	StatusCode    int    `json:"statusCode"`
+	StatusText    string `json:"statusText"`
 	UserID        string `json:"userId"`
 
-	ExecContext `json:"execContext"` // Embedded struct
+	execContext `json:"execContext"` // Embedded struct
 }
 
 // Error returns the string representation of the apiError.
@@ -30,16 +32,16 @@ func (e *apiError) Unwrap() error {
 	return e.InternalError
 }
 
-// NewAPIErr is required because we have to json.Marshal apiError so ExecContext needs
+// NewAPIErr is required because we have to json.Marshal apiError so execContext needs
 // to be public however we don't want users to have to provide that
 type NewAPIErr struct {
-	APIEndpoint string `json:"apiEndpoint,omitempty"`
-	CallerID    string `json:"callerId"`
-	InternalErr error  `json:"internalError,omitempty"` // An internal error if it exists such as twilio.SendSMS or other integrations
-	Message     string `json:"message"`
-	RequestID   string `json:"requestId"`
-	StatusCode  int    `json:"statusCode"`
-	UserID      string `json:"userId"`
+	APIEndpoint   string `json:"apiEndpoint,omitempty"`
+	CallerID      string `json:"callerId"`
+	InternalError error  `json:"internalError,omitempty"` // An internal error if it exists such as twilio.SendSMS or other integrations
+	Message       string `json:"message"`
+	RequestID     string `json:"requestId"`
+	StatusCode    int    `json:"statusCode"`
+	UserID        string `json:"userId"`
 }
 
 func LogNewAPIErr(newAPIErr NewAPIErr) error {
@@ -50,13 +52,14 @@ func LogNewAPIErr(newAPIErr NewAPIErr) error {
 	apiErr := apiError{
 		APIEndpoint:   newAPIErr.APIEndpoint,
 		CallerID:      newAPIErr.CallerID,
-		InternalError: newAPIErr.InternalErr,
+		InternalError: fmt.Errorf("wrapping error %w", newAPIErr.InternalError),
 		Message:       newAPIErr.Message,
 		RequestID:     newAPIErr.RequestID,
 		StatusCode:    newAPIErr.StatusCode,
+		StatusText:    http.StatusText(newAPIErr.StatusCode),
 		UserID:        newAPIErr.UserID,
 
-		ExecContext: getExecContext(),
+		execContext: getExecContext(),
 	}
 
 	log.Error().

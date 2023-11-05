@@ -66,11 +66,3 @@ func (e EnumDBErrorType) HTTPStatus() int {
 	}
 	return http.StatusInternalServerError
 }
-
-// HTTPStatusAndText translates the EnumDBErrorType to an HTTP status code and text.
-func (e EnumDBErrorType) HTTPStatusAndText() (int, string) {
-	if status, ok := dbErrToHTTPStatusMap[e]; ok {
-		return status, http.StatusText(status)
-	}
-	return http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError)
-}
