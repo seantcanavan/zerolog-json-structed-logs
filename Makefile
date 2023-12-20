@@ -5,7 +5,7 @@ SHELL := /bin/bash
 all: clean tidy format build test
 
 build: clean
-	go build ./....
+	go build ./...
 
 clean:
 	rm -rfv ./bin
@@ -17,13 +17,13 @@ format:
 	gofmt -s -w -l .
 
 run:
-	source .env && fresh
+	fresh
 
 test:
-	source .env && go test ./...
+	go test ./...
 
 test-cached:
-	source .env && go test ./... -count=1
+	go test ./... -count=1
 
 tidy:
 	go mod tidy

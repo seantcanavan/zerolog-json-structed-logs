@@ -1,4 +1,4 @@
-package sl
+package sldb
 
 import (
 	"encoding/json"
@@ -6,47 +6,22 @@ import (
 	"fmt"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/seantcanavan/zerolog-json-structured-logs/slutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"math/rand"
 	"os"
 	"testing"
 	"time"
 )
 
-const TempFileNameDBLogs = "testdblogs"
-const TempFileNameAPILogs = "testapilogs"
-
-var APILogFile *os.File // zerolog writes to this file so we can capture the output
-var DBLogFile *os.File  // zerolog writes to this file so we can capture the output
-
-// generate a new, random Now every execution. This helps test more permutations of dates and edge cases
-var staticNow = func() time.Time {
-	nowRand := rand.New(rand.NewSource(time.Now().Unix()))
-	// Generating a random year, month, day, etc.
-	year := nowRand.Intn(2023-2000) + 2000 // random year between 2000 and 2023
-	month := time.Month(nowRand.Intn(12) + 1)
-	day := nowRand.Intn(28) + 1 // to avoid issues with February, keep it up to 28
-	hour := nowRand.Intn(24)
-	minute := nowRand.Intn(60)
-	second := nowRand.Intn(60)
-
-	// Constructing the random date using the time.Date function
-	randomDate := time.Date(year, month, day, hour, minute, second, 0, time.UTC)
-
-	return randomDate
-}()
-
-func staticNowFunc() time.Time {
-	return staticNow
-}
+var dbLogFile *os.File // zerolog writes to this file so we can capture the output
 
 func setupDBErrorFileLogger() {
-	// have to declare this here to prevent shadowing the outer DBLogFile with :=
+	// have to declare this here to prevent shadowing the outer dbLogFile with :=
 	var err error
 
-	if _, err = os.Stat(TempFileNameDBLogs); err == nil {
-		err = os.Remove(TempFileNameDBLogs)
+	if _, err = os.Stat(slutil.TempFileNameDBLogs); err == nil {
+		err = os.Remove(slutil.TempFileNameDBLogs)
 		if err != nil {
 			panic(fmt.Sprintf("Could not remove existing temp file: %s", err))
 		}
@@ -56,7 +31,7 @@ func setupDBErrorFileLogger() {
 		panic(fmt.Sprintf("Error checking for temp file existence: %s", err))
 	}
 
-	DBLogFile, err = os.CreateTemp("", TempFileNameDBLogs)
+	dbLogFile, err = os.CreateTemp("", slutil.TempFileNameDBLogs)
 	if err != nil {
 		panic(fmt.Sprintf("err is not nil: %s", err))
 	}
@@ -65,15 +40,15 @@ func setupDBErrorFileLogger() {
 	zerolog.TimeFieldFormat = time.RFC3339Nano
 
 	// Configure zerolog to use a static now function for timestamp calculations so we can verify the timestamp later
-	zerolog.TimestampFunc = staticNowFunc
+	zerolog.TimestampFunc = slutil.StaticNowFunc
 
 	// Configure zerolog to write to the temp file so we can easily capture the output
-	log.Logger = zerolog.New(DBLogFile).With().Timestamp().Logger()
+	log.Logger = zerolog.New(dbLogFile).With().Timestamp().Logger()
 	zerolog.DisableSampling(true)
 }
 
 func tearDownDatabaseFileLogger() {
-	err := os.Remove(DBLogFile.Name())
+	err := os.Remove(dbLogFile.Name())
 	if err != nil {
 		panic(fmt.Sprintf("err is not nil: %s", err))
 	}
@@ -82,22 +57,22 @@ func tearDownDatabaseFileLogger() {
 func TestDBError_Error(t *testing.T) {
 	expectedDBErr := DatabaseError{
 		// Assume these values are what you expect to see after the operation.
-		Constraint:    "Constraint",
-		DBName:        "DBName",
-		InternalError: errors.New("InternalError"),
-		Message:       "Message",
-		Operation:     "Operation",
-		Query:         "Query",
-		TableName:     "TableName",
-		Type:          ErrDBConnectionFailed,
+		Constraint: "Constraint",
+		DBName:     "DBName",
+		InnerError: errors.New("InnerError"),
+		Message:    "Message",
+		Operation:  "Operation",
+		Query:      "Query",
+		TableName:  "TableName",
+		Type:       ErrDBConnectionFailed,
 
 		// we have to wrap this so the call stack is at the same depth as LogNewDBErr below
-		execContext: func() execContext { return getExecContext() }(),
+		ExecContext: func() slutil.ExecContext { return slutil.GetExecContext() }(),
 	}
 
 	errString := expectedDBErr.Error()
 
-	expectedString := "[DatabaseError] Operation operation on DBName.TableName with query: Query - Message - InternalError"
+	expectedString := "[DatabaseError] Operation operation on DBName.TableName with query: Query - Message - InnerError"
 
 	assert.Equal(t, expectedString, errString)
 }
@@ -111,33 +86,33 @@ func TestLogNewDBErr(t *testing.T) {
 
 	expectedDBErr := DatabaseError{
 		// Assume these values are what you expect to see after the operation.
-		Constraint:    "pk_users",
-		DBName:        "testdb",
-		InternalError: fmt.Errorf("wrapping error %w", errors.New("sql: no rows in result set")),
-		Message:       message,
-		Operation:     "SELECT",
-		Query:         "SELECT * FROM users",
-		TableName:     "users",
-		Type:          ErrDBConnectionFailed,
+		Constraint: "pk_users",
+		DBName:     "testdb",
+		InnerError: fmt.Errorf("wrapping error %w", errors.New("sql: no rows in result set")),
+		Message:    message,
+		Operation:  "SELECT",
+		Query:      "SELECT * FROM users",
+		TableName:  "users",
+		Type:       ErrDBConnectionFailed,
 
 		// we have to wrap this so the call stack is at the same depth as LogNewDBErr below
-		execContext: func() execContext { return getExecContext() }(),
+		ExecContext: func() slutil.ExecContext { return slutil.GetExecContext() }(),
 	}
 
 	newDBErr := LogNewDBErr(NewDBErr{ // Call LogNewDBErr to log the error to the temp file
-		Constraint:    expectedDBErr.Constraint,
-		DBName:        expectedDBErr.DBName,
-		InternalError: errors.New("sql: no rows in result set"),
-		Message:       expectedDBErr.Message,
-		Operation:     expectedDBErr.Operation,
-		Query:         expectedDBErr.Query,
-		TableName:     expectedDBErr.TableName,
-		Type:          expectedDBErr.Type,
+		Constraint: expectedDBErr.Constraint,
+		DBName:     expectedDBErr.DBName,
+		InnerError: errors.New("sql: no rows in result set"),
+		Message:    expectedDBErr.Message,
+		Operation:  expectedDBErr.Operation,
+		Query:      expectedDBErr.Query,
+		TableName:  expectedDBErr.TableName,
+		Type:       expectedDBErr.Type,
 	})
 
 	// Make sure to sync and close the log file to ensure all log entries are written.
-	require.NoError(t, DBLogFile.Sync())
-	require.NoError(t, DBLogFile.Close())
+	require.NoError(t, dbLogFile.Sync())
+	require.NoError(t, dbLogFile.Close())
 
 	// Use errors.As to unwrap the error and verify that newDBErr is of type *DatabaseError
 	var unwrappedNewDBErr *DatabaseError
@@ -148,29 +123,29 @@ func TestLogNewDBErr(t *testing.T) {
 		assert.Equal(t, expectedDBErr.DBName, unwrappedNewDBErr.DBName)
 		assert.Equal(t, expectedDBErr.File, unwrappedNewDBErr.File)
 		assert.Equal(t, expectedDBErr.Function, unwrappedNewDBErr.Function)
-		assert.Equal(t, expectedDBErr.InternalError, unwrappedNewDBErr.InternalError)
+		assert.Equal(t, expectedDBErr.InnerError, unwrappedNewDBErr.InnerError)
 		assert.NotEqual(t, expectedDBErr.Line, unwrappedNewDBErr.Line) // these are called on different line numbers so should be different
 		assert.Equal(t, expectedDBErr.Message, unwrappedNewDBErr.Message)
 		assert.Equal(t, expectedDBErr.Operation, unwrappedNewDBErr.Operation)
 		assert.Equal(t, expectedDBErr.Query, unwrappedNewDBErr.Query)
 		assert.Equal(t, expectedDBErr.TableName, unwrappedNewDBErr.TableName)
 		assert.Equal(t, expectedDBErr.Type, unwrappedNewDBErr.Type)
-		assert.EqualError(t, expectedDBErr.InternalError, unwrappedNewDBErr.InternalError.Error())
+		assert.EqualError(t, expectedDBErr.InnerError, unwrappedNewDBErr.InnerError.Error())
 	})
 
 	t.Run("verify that jsonLogContents is well formed", func(t *testing.T) {
 		// Read the log file's logFileJSONContents for assertion.
-		logFileJSONContents, err := os.ReadFile(DBLogFile.Name())
+		logFileJSONContents, err := os.ReadFile(dbLogFile.Name())
 		require.NoError(t, err)
 
 		// Unmarshal logFileJSONContents into a generic map[string]any
 		var jsonLogContents map[string]any
 		require.NoError(t, json.Unmarshal(logFileJSONContents, &jsonLogContents), "Error unmarshalling log logFileJSONContents")
 		require.NotEmpty(t, jsonLogContents, "Log file should contain at least one entry.")
-		require.NotNil(t, jsonLogContents[ZLObjectKey], fmt.Sprintf("Log entry should contain '%s' field.", ZLObjectKey))
+		require.NotNil(t, jsonLogContents[slutil.ZLObjectKey], fmt.Sprintf("Log entry should contain '%s' field.", slutil.ZLObjectKey))
 
 		t.Run("verify that jsonLogContents unmarshals into an instance of ZLJSONItem", func(t *testing.T) {
-			var zeroLogJSONItem ZLJSONItem
+			var zeroLogJSONItem slutil.ZLJSONItem
 			require.NoError(t, json.Unmarshal(logFileJSONContents, &zeroLogJSONItem), "json.Unmarshal should not have produced an error")
 
 			// check for the error values embedded in the top-level logging struct
@@ -178,8 +153,8 @@ func TestLogNewDBErr(t *testing.T) {
 			assert.Equal(t, unwrappedNewDBErr.DBName, zeroLogJSONItem.ErrorAsJSON["dbName"])
 			assert.Equal(t, unwrappedNewDBErr.File, zeroLogJSONItem.ErrorAsJSON["file"])
 			assert.Equal(t, unwrappedNewDBErr.Function, zeroLogJSONItem.ErrorAsJSON["function"])
-			assert.Equal(t, unwrappedNewDBErr.InternalError.Error(), zeroLogJSONItem.ErrorAsJSON["internalError"]) // this is the original, top level error that DatabaseError wrapped such as a SQLError
-			assert.Equal(t, float64(unwrappedNewDBErr.Line), zeroLogJSONItem.ErrorAsJSON["line"])                  // you get a float64 when unmarshalling a number into interface{} for safety
+			assert.Equal(t, unwrappedNewDBErr.InnerError.Error(), zeroLogJSONItem.ErrorAsJSON["innerError"]) // this is the original, top level error that DatabaseError wrapped such as a SQLError
+			assert.Equal(t, float64(unwrappedNewDBErr.Line), zeroLogJSONItem.ErrorAsJSON["line"])            // you get a float64 when unmarshalling a number into interface{} for safety
 			assert.Equal(t, unwrappedNewDBErr.Message, zeroLogJSONItem.ErrorAsJSON["message"])
 			assert.Equal(t, unwrappedNewDBErr.Operation, zeroLogJSONItem.ErrorAsJSON["operation"])
 			assert.Equal(t, unwrappedNewDBErr.Query, zeroLogJSONItem.ErrorAsJSON["query"])
@@ -188,20 +163,20 @@ func TestLogNewDBErr(t *testing.T) {
 			// check for the zerolog standard values - this is critical for testing formats and outputs for things like time and level
 			assert.Equal(t, zerolog.ErrorLevel.String(), zeroLogJSONItem.Level)
 			assert.Equal(t, message, zeroLogJSONItem.Message)
-			assert.Equal(t, staticNowFunc(), zeroLogJSONItem.Time)
+			assert.Equal(t, slutil.StaticNowFunc(), zeroLogJSONItem.Time)
 		})
 
 		t.Run("verify that ErrorAsJSON is well formed", func(t *testing.T) {
-			dbErrEntryLogValues, ok := jsonLogContents[ZLObjectKey].(map[string]any)
-			require.True(t, ok, fmt.Sprintf("%s field should be a JSON object.", ZLObjectKey))
+			dbErrEntryLogValues, ok := jsonLogContents[slutil.ZLObjectKey].(map[string]any)
+			require.True(t, ok, fmt.Sprintf("%s field should be a JSON object.", slutil.ZLObjectKey))
 
 			t.Run("verify that dbErrEntryLogValues has all of its properties and values set correctly", func(t *testing.T) {
 				assert.Equal(t, unwrappedNewDBErr.Constraint, dbErrEntryLogValues["constraint"])
 				assert.Equal(t, unwrappedNewDBErr.DBName, dbErrEntryLogValues["dbName"])
 				assert.Equal(t, unwrappedNewDBErr.File, dbErrEntryLogValues["file"])
 				assert.Equal(t, unwrappedNewDBErr.Function, dbErrEntryLogValues["function"])
-				assert.Equal(t, unwrappedNewDBErr.InternalError.Error(), dbErrEntryLogValues["internalError"]) // this is the original, top level error that DatabaseError wrapped such as a SQLError
-				assert.Equal(t, float64(unwrappedNewDBErr.Line), dbErrEntryLogValues["line"])                  // you get a float64 when unmarshalling a number into interface{} for safety
+				assert.Equal(t, unwrappedNewDBErr.InnerError.Error(), dbErrEntryLogValues["innerError"]) // this is the original, top level error that DatabaseError wrapped such as a SQLError
+				assert.Equal(t, float64(unwrappedNewDBErr.Line), dbErrEntryLogValues["line"])            // you get a float64 when unmarshalling a number into interface{} for safety
 				assert.Equal(t, unwrappedNewDBErr.Message, dbErrEntryLogValues["message"])
 				assert.Equal(t, unwrappedNewDBErr.Operation, dbErrEntryLogValues["operation"])
 				assert.Equal(t, unwrappedNewDBErr.Query, dbErrEntryLogValues["query"])
@@ -217,25 +192,25 @@ func TestLogNewDBErr(t *testing.T) {
 
 func TestFindLastDatabaseError(t *testing.T) {
 	firstError := LogNewDBErr(NewDBErr{
-		Constraint:    "pk_users_id",
-		DBName:        "usersdb",
-		InternalError: fmt.Errorf("primary key violation"),
-		Message:       "duplicate entry for primary key",
-		Operation:     "INSERT",
-		Query:         "INSERT INTO users (id, name) VALUES (1, 'John Doe')",
-		TableName:     "users",
-		Type:          ErrDBConstraintViolated,
+		Constraint: "pk_users_id",
+		DBName:     "usersdb",
+		InnerError: fmt.Errorf("primary key violation"),
+		Message:    "duplicate entry for primary key",
+		Operation:  "INSERT",
+		Query:      "INSERT INTO users (id, name) VALUES (1, 'John Doe')",
+		TableName:  "users",
+		Type:       ErrDBConstraintViolated,
 	})
 
 	secondError := LogNewDBErr(NewDBErr{
-		Constraint:    "fk_orders_user_id",
-		DBName:        "ordersdb",
-		InternalError: firstError,
-		Message:       "invalid foreign key",
-		Operation:     "UPDATE",
-		Query:         "UPDATE orders SET user_id = 2 WHERE order_id = 99",
-		TableName:     "orders",
-		Type:          ErrDBForeignKeyViolated,
+		Constraint: "fk_orders_user_id",
+		DBName:     "ordersdb",
+		InnerError: firstError,
+		Message:    "invalid foreign key",
+		Operation:  "UPDATE",
+		Query:      "UPDATE orders SET user_id = 2 WHERE order_id = 99",
+		TableName:  "orders",
+		Type:       ErrDBForeignKeyViolated,
 	})
 
 	// Test
@@ -250,7 +225,7 @@ func TestFindLastDatabaseError(t *testing.T) {
 	require.True(t, errors.As(outermostErr, &secondErrorUnwrapped))
 
 	var firstErrorUnwrapped *DatabaseError
-	require.True(t, errors.As(secondErrorUnwrapped.InternalError, &firstErrorUnwrapped))
+	require.True(t, errors.As(secondErrorUnwrapped.InnerError, &firstErrorUnwrapped))
 
 	// Compare the outermost error returned to the second error defined
 	assert.Equal(t, secondErrorUnwrapped.Constraint, outermostDBErr.Constraint)

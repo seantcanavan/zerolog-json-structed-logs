@@ -3,33 +3,28 @@ package example
 import (
 	"errors"
 	"fmt"
-	sl "github.com/seantcanavan/zerolog-json-structured-logs"
+	"github.com/seantcanavan/zerolog-json-structured-logs/slapi"
+	"github.com/seantcanavan/zerolog-json-structured-logs/sldb"
 	"net/http"
 )
 
 func wrapDatabaseError() error {
-	newDBErr := sl.LogNewDBErr(sl.NewDBErr{ // Call LogNewDBErr to log the DB error to the temp file
-		Constraint:    "pk_users",
-		DBName:        "testdb",
-		InternalError: errors.New("sql: no rows in result set"),
-		Message:       "connection to database failed",
-		Operation:     "SELECT",
-		Query:         "SELECT * FROM users",
-		TableName:     "users",
-		Type:          sl.ErrDBConnectionFailed,
+	expectedDBErr := sldb.LogNewDBErr(sldb.NewDBErr{ // Call LogNewDBErr to log the DB error to the temp file
+		Constraint: "pk_users",
+		DBName:     "testdb",
+		InnerError: errors.New("sql: no rows in result set"),
+		Message:    "connection to database failed",
+		Operation:  "SELECT",
+		Query:      "SELECT * FROM users",
+		TableName:  "users",
+		Type:       sldb.ErrDBConnectionFailed,
 	})
 
-	code := sl.ErrDBConnectionFailed.HTTPStatus()
+	apiErr := slapi.GenerateNonRandomAPIError()
+	apiErr.InnerError = fmt.Errorf("wrapping db error %w", expectedDBErr)
+	apiErr.StatusCode = sldb.ErrDBConnectionFailed.HTTPStatus()
 
-	return sl.LogNewAPIErr(sl.NewAPIErr{ // call LogNewAPIErr to log the API error to the temp file
-		APIEndpoint:   "/test/endpoint",
-		CallerID:      "caller-123",
-		InternalError: newDBErr,
-		Message:       "cannot get users by address",
-		RequestID:     "req-123",
-		StatusCode:    code,
-		UserID:        "user-123",
-	})
+	return slapi.LogNew(apiErr)
 }
 
 // lemonadeStandError is our custom error type for the lemonade stand API.
@@ -51,13 +46,9 @@ func wrapLibraryError() error {
 		Message:    "sorry we need 48 lemons to make lemonade",
 	}
 
-	return sl.LogNewAPIErr(sl.NewAPIErr{
-		APIEndpoint:   "/lemonade/make",
-		CallerID:      "caller-123",
-		InternalError: lse,
-		Message:       "cannot get users by address",
-		RequestID:     "req-123",
-		StatusCode:    http.StatusServiceUnavailable,
-		UserID:        "user-123",
-	})
+	apiErr := slapi.GenerateNonRandomAPIError()
+	apiErr.InnerError = fmt.Errorf("wrapping db error %w", lse)
+	apiErr.StatusCode = http.StatusServiceUnavailable
+
+	return slapi.LogNew(apiErr)
 }
