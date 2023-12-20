@@ -5,7 +5,7 @@ SHELL := /bin/bash
 all: clean tidy format build test
 
 build: clean
-	go build ./....
+	go build ./...
 
 clean:
 	rm -rfv ./bin

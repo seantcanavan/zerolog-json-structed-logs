@@ -1,4 +1,4 @@
-package sl
+package slapi
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/seantcanavan/zerolog-json-structured-logs/slutil"
 	"net/http"
 )
 
@@ -47,7 +48,7 @@ type APIError struct {
 	RequestID   string              `json:"requestId,omitempty"`
 	StatusCode  int                 `json:"statusCode,omitempty"`
 
-	execContext `json:"execContext"` // Embedded struct
+	slutil.ExecContext `json:"execContext"` // Embedded struct
 }
 
 // Error returns the string representation of the APIError.
@@ -76,26 +77,26 @@ func addDefaults(apiErr *APIError) {
 
 func LogAPIErrCtx(ctx context.Context, err error, message string, statusCode int) error {
 	apiErr := APIError{
-		CallerID:    fromCtxSafe[string](ctx, CallerIDKey),
-		CallerType:  fromCtxSafe[string](ctx, CallerTypeKey),
+		CallerID:    slutil.FromCtxSafe[string](ctx, CallerIDKey),
+		CallerType:  slutil.FromCtxSafe[string](ctx, CallerTypeKey),
 		InnerError:  err,
 		Message:     message,
-		Method:      fromCtxSafe[string](ctx, MethodKey),
-		MultiParams: fromCtxSafe[map[string][]string](ctx, MultiParamsKey),
-		OwnerID:     fromCtxSafe[string](ctx, OwnerIDKey),
-		OwnerType:   fromCtxSafe[string](ctx, OwnerTypeKey),
-		Path:        fromCtxSafe[string](ctx, PathKey),
-		PathParams:  fromCtxSafe[map[string]string](ctx, PathParamsKey),
-		QueryParams: fromCtxSafe[map[string]string](ctx, QueryParamsKey),
-		RequestID:   fromCtxSafe[string](ctx, RequestIDKey),
+		Method:      slutil.FromCtxSafe[string](ctx, MethodKey),
+		MultiParams: slutil.FromCtxSafe[map[string][]string](ctx, MultiParamsKey),
+		OwnerID:     slutil.FromCtxSafe[string](ctx, OwnerIDKey),
+		OwnerType:   slutil.FromCtxSafe[string](ctx, OwnerTypeKey),
+		Path:        slutil.FromCtxSafe[string](ctx, PathKey),
+		PathParams:  slutil.FromCtxSafe[map[string]string](ctx, PathParamsKey),
+		QueryParams: slutil.FromCtxSafe[map[string]string](ctx, QueryParamsKey),
+		RequestID:   slutil.FromCtxSafe[string](ctx, RequestIDKey),
 		StatusCode:  statusCode,
-		execContext: execContext{},
+		ExecContext: slutil.ExecContext{},
 	}
 
 	addDefaults(&apiErr)
 
 	log.Error().
-		Object(ZLObjectKey, &apiErr).
+		Object(slutil.ZLObjectKey, &apiErr).
 		Msg(apiErr.Message)
 
 	return &apiErr
@@ -104,10 +105,10 @@ func LogAPIErrCtx(ctx context.Context, err error, message string, statusCode int
 func LogAPIErr(apiErr APIError) error {
 	addDefaults(&apiErr)
 
-	apiErr.execContext = getExecContext()
+	apiErr.ExecContext = slutil.GetExecContext()
 
 	log.Error().
-		Object(ZLObjectKey, &apiErr).
+		Object(slutil.ZLObjectKey, &apiErr).
 		Msg(apiErr.Message)
 
 	return &apiErr
@@ -194,6 +195,6 @@ func GenerateNonRandomAPIError() APIError {
 		QueryParams: map[string]string{"queryKey1": "queryVal1", "queryKey2": "queryVal2"},
 		RequestID:   "RequestID",
 		StatusCode:  500,
-		execContext: func() execContext { return getExecContext() }(),
+		ExecContext: func() slutil.ExecContext { return slutil.GetExecContext() }(),
 	}
 }

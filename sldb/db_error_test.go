@@ -1,4 +1,4 @@
-package sl
+package sldb
 
 import (
 	"encoding/json"
@@ -6,47 +6,22 @@ import (
 	"fmt"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/seantcanavan/zerolog-json-structured-logs/slutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"math/rand"
 	"os"
 	"testing"
 	"time"
 )
 
-const TempFileNameDBLogs = "testdblogs"
-const TempFileNameAPILogs = "testapilogs"
-
-var APILogFile *os.File // zerolog writes to this file so we can capture the output
-var DBLogFile *os.File  // zerolog writes to this file so we can capture the output
-
-// generate a new, random Now every execution. This helps test more permutations of dates and edge cases
-var staticNow = func() time.Time {
-	nowRand := rand.New(rand.NewSource(time.Now().Unix()))
-	// Generating a random year, month, day, etc.
-	year := nowRand.Intn(2023-2000) + 2000 // random year between 2000 and 2023
-	month := time.Month(nowRand.Intn(12) + 1)
-	day := nowRand.Intn(28) + 1 // to avoid issues with February, keep it up to 28
-	hour := nowRand.Intn(24)
-	minute := nowRand.Intn(60)
-	second := nowRand.Intn(60)
-
-	// Constructing the random date using the time.Date function
-	randomDate := time.Date(year, month, day, hour, minute, second, 0, time.UTC)
-
-	return randomDate
-}()
-
-func staticNowFunc() time.Time {
-	return staticNow
-}
+var dbLogFile *os.File // zerolog writes to this file so we can capture the output
 
 func setupDBErrorFileLogger() {
-	// have to declare this here to prevent shadowing the outer DBLogFile with :=
+	// have to declare this here to prevent shadowing the outer dbLogFile with :=
 	var err error
 
-	if _, err = os.Stat(TempFileNameDBLogs); err == nil {
-		err = os.Remove(TempFileNameDBLogs)
+	if _, err = os.Stat(slutil.TempFileNameDBLogs); err == nil {
+		err = os.Remove(slutil.TempFileNameDBLogs)
 		if err != nil {
 			panic(fmt.Sprintf("Could not remove existing temp file: %s", err))
 		}
@@ -56,7 +31,7 @@ func setupDBErrorFileLogger() {
 		panic(fmt.Sprintf("Error checking for temp file existence: %s", err))
 	}
 
-	DBLogFile, err = os.CreateTemp("", TempFileNameDBLogs)
+	dbLogFile, err = os.CreateTemp("", slutil.TempFileNameDBLogs)
 	if err != nil {
 		panic(fmt.Sprintf("err is not nil: %s", err))
 	}
@@ -65,15 +40,15 @@ func setupDBErrorFileLogger() {
 	zerolog.TimeFieldFormat = time.RFC3339Nano
 
 	// Configure zerolog to use a static now function for timestamp calculations so we can verify the timestamp later
-	zerolog.TimestampFunc = staticNowFunc
+	zerolog.TimestampFunc = slutil.StaticNowFunc
 
 	// Configure zerolog to write to the temp file so we can easily capture the output
-	log.Logger = zerolog.New(DBLogFile).With().Timestamp().Logger()
+	log.Logger = zerolog.New(dbLogFile).With().Timestamp().Logger()
 	zerolog.DisableSampling(true)
 }
 
 func tearDownDatabaseFileLogger() {
-	err := os.Remove(DBLogFile.Name())
+	err := os.Remove(dbLogFile.Name())
 	if err != nil {
 		panic(fmt.Sprintf("err is not nil: %s", err))
 	}
@@ -92,7 +67,7 @@ func TestDBError_Error(t *testing.T) {
 		Type:          ErrDBConnectionFailed,
 
 		// we have to wrap this so the call stack is at the same depth as LogNewDBErr below
-		execContext: func() execContext { return getExecContext() }(),
+		ExecContext: func() slutil.ExecContext { return slutil.GetExecContext() }(),
 	}
 
 	errString := expectedDBErr.Error()
@@ -121,7 +96,7 @@ func TestLogNewDBErr(t *testing.T) {
 		Type:          ErrDBConnectionFailed,
 
 		// we have to wrap this so the call stack is at the same depth as LogNewDBErr below
-		execContext: func() execContext { return getExecContext() }(),
+		ExecContext: func() slutil.ExecContext { return slutil.GetExecContext() }(),
 	}
 
 	newDBErr := LogNewDBErr(NewDBErr{ // Call LogNewDBErr to log the error to the temp file
@@ -136,8 +111,8 @@ func TestLogNewDBErr(t *testing.T) {
 	})
 
 	// Make sure to sync and close the log file to ensure all log entries are written.
-	require.NoError(t, DBLogFile.Sync())
-	require.NoError(t, DBLogFile.Close())
+	require.NoError(t, dbLogFile.Sync())
+	require.NoError(t, dbLogFile.Close())
 
 	// Use errors.As to unwrap the error and verify that newDBErr is of type *DatabaseError
 	var unwrappedNewDBErr *DatabaseError
@@ -160,17 +135,17 @@ func TestLogNewDBErr(t *testing.T) {
 
 	t.Run("verify that jsonLogContents is well formed", func(t *testing.T) {
 		// Read the log file's logFileJSONContents for assertion.
-		logFileJSONContents, err := os.ReadFile(DBLogFile.Name())
+		logFileJSONContents, err := os.ReadFile(dbLogFile.Name())
 		require.NoError(t, err)
 
 		// Unmarshal logFileJSONContents into a generic map[string]any
 		var jsonLogContents map[string]any
 		require.NoError(t, json.Unmarshal(logFileJSONContents, &jsonLogContents), "Error unmarshalling log logFileJSONContents")
 		require.NotEmpty(t, jsonLogContents, "Log file should contain at least one entry.")
-		require.NotNil(t, jsonLogContents[ZLObjectKey], fmt.Sprintf("Log entry should contain '%s' field.", ZLObjectKey))
+		require.NotNil(t, jsonLogContents[slutil.ZLObjectKey], fmt.Sprintf("Log entry should contain '%s' field.", slutil.ZLObjectKey))
 
 		t.Run("verify that jsonLogContents unmarshals into an instance of ZLJSONItem", func(t *testing.T) {
-			var zeroLogJSONItem ZLJSONItem
+			var zeroLogJSONItem slutil.ZLJSONItem
 			require.NoError(t, json.Unmarshal(logFileJSONContents, &zeroLogJSONItem), "json.Unmarshal should not have produced an error")
 
 			// check for the error values embedded in the top-level logging struct
@@ -188,12 +163,12 @@ func TestLogNewDBErr(t *testing.T) {
 			// check for the zerolog standard values - this is critical for testing formats and outputs for things like time and level
 			assert.Equal(t, zerolog.ErrorLevel.String(), zeroLogJSONItem.Level)
 			assert.Equal(t, message, zeroLogJSONItem.Message)
-			assert.Equal(t, staticNowFunc(), zeroLogJSONItem.Time)
+			assert.Equal(t, slutil.StaticNowFunc(), zeroLogJSONItem.Time)
 		})
 
 		t.Run("verify that ErrorAsJSON is well formed", func(t *testing.T) {
-			dbErrEntryLogValues, ok := jsonLogContents[ZLObjectKey].(map[string]any)
-			require.True(t, ok, fmt.Sprintf("%s field should be a JSON object.", ZLObjectKey))
+			dbErrEntryLogValues, ok := jsonLogContents[slutil.ZLObjectKey].(map[string]any)
+			require.True(t, ok, fmt.Sprintf("%s field should be a JSON object.", slutil.ZLObjectKey))
 
 			t.Run("verify that dbErrEntryLogValues has all of its properties and values set correctly", func(t *testing.T) {
 				assert.Equal(t, unwrappedNewDBErr.Constraint, dbErrEntryLogValues["constraint"])

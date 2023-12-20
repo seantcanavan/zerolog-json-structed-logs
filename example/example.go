@@ -3,12 +3,13 @@ package example
 import (
 	"errors"
 	"fmt"
-	sl "github.com/seantcanavan/zerolog-json-structured-logs"
+	"github.com/seantcanavan/zerolog-json-structured-logs/slapi"
+	"github.com/seantcanavan/zerolog-json-structured-logs/sldb"
 	"net/http"
 )
 
 func wrapDatabaseError() error {
-	expectedDBErr := sl.LogNewDBErr(sl.NewDBErr{ // Call LogNewDBErr to log the DB error to the temp file
+	expectedDBErr := sldb.LogNewDBErr(sldb.NewDBErr{ // Call LogNewDBErr to log the DB error to the temp file
 		Constraint:    "pk_users",
 		DBName:        "testdb",
 		InternalError: errors.New("sql: no rows in result set"),
@@ -16,14 +17,14 @@ func wrapDatabaseError() error {
 		Operation:     "SELECT",
 		Query:         "SELECT * FROM users",
 		TableName:     "users",
-		Type:          sl.ErrDBConnectionFailed,
+		Type:          sldb.ErrDBConnectionFailed,
 	})
 
-	apiErr := sl.GenerateNonRandomAPIError()
+	apiErr := slapi.GenerateNonRandomAPIError()
 	apiErr.InnerError = fmt.Errorf("wrapping db error %w", expectedDBErr)
-	apiErr.StatusCode = sl.ErrDBConnectionFailed.HTTPStatus()
+	apiErr.StatusCode = sldb.ErrDBConnectionFailed.HTTPStatus()
 
-	return sl.LogAPIErr(apiErr)
+	return slapi.LogAPIErr(apiErr)
 }
 
 // lemonadeStandError is our custom error type for the lemonade stand API.
@@ -45,9 +46,9 @@ func wrapLibraryError() error {
 		Message:    "sorry we need 48 lemons to make lemonade",
 	}
 
-	apiErr := sl.GenerateNonRandomAPIError()
+	apiErr := slapi.GenerateNonRandomAPIError()
 	apiErr.InnerError = fmt.Errorf("wrapping db error %w", lse)
 	apiErr.StatusCode = http.StatusServiceUnavailable
 
-	return sl.LogAPIErr(apiErr)
+	return slapi.LogAPIErr(apiErr)
 }

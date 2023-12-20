@@ -1,8 +1,8 @@
-package sl
+package slutil
 
 import "context"
 
-func fromCtxSafe[T any](ctx context.Context, key interface{}) T {
+func FromCtxSafe[T any](ctx context.Context, key interface{}) T {
 	val, ok := ctx.Value(key).(T)
 	if !ok {
 		// Return zero value of T if the type does not match
@@ -11,7 +11,7 @@ func fromCtxSafe[T any](ctx context.Context, key interface{}) T {
 	return val
 }
 
-func uneraseMapStringArray(input map[string]any) map[string][]string {
+func UneraseMapStringArray(input map[string]any) map[string][]string {
 	res := make(map[string][]string)
 
 	for currentKey, currentVal := range input {
@@ -26,7 +26,7 @@ func uneraseMapStringArray(input map[string]any) map[string][]string {
 	return res
 }
 
-func uneraseMapString(input map[string]any) map[string]string {
+func UneraseMapString(input map[string]any) map[string]string {
 	res := make(map[string]string)
 
 	for currentKey, currentVal := range input {

@@ -1,10 +1,11 @@
-package sl
+package sldb
 
 import (
 	"errors"
 	"fmt"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/seantcanavan/zerolog-json-structured-logs/slutil"
 )
 
 // DatabaseError represents an error that occurred in the database layer of the application.
@@ -19,7 +20,7 @@ type DatabaseError struct {
 	TableName     string          `json:"tableName,omitempty"`
 	Type          EnumDBErrorType `json:"type,omitempty"`
 
-	execContext `json:"execContext,omitempty"` // Embedded struct
+	slutil.ExecContext `json:"execContext,omitempty"` // Embedded struct
 }
 
 // Error returns the string representation of the DatabaseError.
@@ -61,11 +62,11 @@ func LogNewDBErr(newDBErr NewDBErr) error {
 		TableName:     newDBErr.TableName,
 		Type:          newDBErr.Type,
 
-		execContext: getExecContext(),
+		ExecContext: slutil.GetExecContext(),
 	}
 
 	log.Error().
-		Object(ZLObjectKey, &dbErr).
+		Object(slutil.ZLObjectKey, &dbErr).
 		Msg(newDBErr.Message)
 
 	return &dbErr

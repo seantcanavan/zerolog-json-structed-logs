@@ -1,4 +1,4 @@
-package sl
+package sldb
 
 import (
 	"github.com/stretchr/testify/assert"

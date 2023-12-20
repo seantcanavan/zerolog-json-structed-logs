@@ -3,7 +3,8 @@ package example
 import (
 	"errors"
 	"fmt"
-	sl "github.com/seantcanavan/zerolog-json-structured-logs"
+	"github.com/seantcanavan/zerolog-json-structured-logs/slapi"
+	"github.com/seantcanavan/zerolog-json-structured-logs/sldb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -11,7 +12,7 @@ import (
 
 func TestWrapDatabaseError(t *testing.T) {
 	// Define the expected DatabaseError
-	expectedDBError := sl.LogNewDBErr(sl.NewDBErr{
+	expectedDBError := sldb.LogNewDBErr(sldb.NewDBErr{
 		Constraint:    "pk_users",
 		DBName:        "testdb",
 		InternalError: errors.New("sql: no rows in result set"),
@@ -19,31 +20,31 @@ func TestWrapDatabaseError(t *testing.T) {
 		Operation:     "SELECT",
 		Query:         "SELECT * FROM users",
 		TableName:     "users",
-		Type:          sl.ErrDBConnectionFailed,
+		Type:          sldb.ErrDBConnectionFailed,
 	})
 
-	apiErr := sl.GenerateNonRandomAPIError()
+	apiErr := slapi.GenerateNonRandomAPIError()
 	apiErr.InnerError = fmt.Errorf("wrapping db error %w", expectedDBError)
-	apiErr.StatusCode = sl.ErrDBConnectionFailed.HTTPStatus()
+	apiErr.StatusCode = sldb.ErrDBConnectionFailed.HTTPStatus()
 
 	// Define the expected APIError
-	expectedAPIError := sl.LogAPIErr(apiErr)
+	expectedAPIError := slapi.LogAPIErr(apiErr)
 
 	// Wrap the DatabaseError in an APIError
 	wrappedAPIError := wrapDatabaseError()
 	require.NotNil(t, wrappedAPIError)
 
-	var unwrappedExpectedAPIError *sl.APIError
+	var unwrappedExpectedAPIError *slapi.APIError
 	require.True(t, errors.As(expectedAPIError, &unwrappedExpectedAPIError))
 
-	var unwrappedExpectedDBError *sl.DatabaseError
+	var unwrappedExpectedDBError *sldb.DatabaseError
 	require.True(t, errors.As(unwrappedExpectedAPIError.InnerError, &unwrappedExpectedDBError))
 
 	// Unwrap the error to assert on the API error
-	var unwrappedAPIErr *sl.APIError
+	var unwrappedAPIErr *slapi.APIError
 	require.True(t, errors.As(wrappedAPIError, &unwrappedAPIErr))
 
-	var dbErr *sl.DatabaseError
+	var dbErr *sldb.DatabaseError
 	require.True(t, errors.As(unwrappedAPIErr.InnerError, &dbErr))
 
 	// Assert the properties of the APIError itself
@@ -55,7 +56,7 @@ func TestWrapDatabaseError(t *testing.T) {
 	assert.Equal(t, unwrappedExpectedAPIError.OwnerID, unwrappedAPIErr.OwnerID)
 
 	// Unwrap the internal error of the APIError to get the DatabaseError
-	var unwrappedDBErr *sl.DatabaseError
+	var unwrappedDBErr *sldb.DatabaseError
 	require.True(t, errors.As(unwrappedAPIErr.InnerError, &unwrappedDBErr))
 
 	// Assert the properties of the unwrapped DatabaseError
