@@ -104,12 +104,18 @@ func LogCtx(ctx context.Context, err error, message string, statusCode int) erro
 
 func LogNew(apiErr APIError) error {
 	addDefaults(&apiErr)
-
 	apiErr.ExecContext = slutil.GetExecContext()
 
 	log.Error().
 		Object(slutil.ZLObjectKey, &apiErr).
 		Msg(apiErr.Message)
+
+	return &apiErr
+}
+
+func New(apiErr APIError) error {
+	addDefaults(&apiErr)
+	apiErr.ExecContext = slutil.GetExecContext()
 
 	return &apiErr
 }
