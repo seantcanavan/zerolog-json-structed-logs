@@ -8,7 +8,7 @@ import (
 )
 
 func wrapDatabaseError() error {
-	newDBErr := sl.LogNewDBErr(sl.NewDBErr{ // Call LogNewDBErr to log the DB error to the temp file
+	expectedDBErr := sl.LogNewDBErr(sl.NewDBErr{ // Call LogNewDBErr to log the DB error to the temp file
 		Constraint:    "pk_users",
 		DBName:        "testdb",
 		InternalError: errors.New("sql: no rows in result set"),
@@ -19,17 +19,11 @@ func wrapDatabaseError() error {
 		Type:          sl.ErrDBConnectionFailed,
 	})
 
-	code := sl.ErrDBConnectionFailed.HTTPStatus()
+	apiErr := sl.GenerateNonRandomAPIError()
+	apiErr.InnerError = fmt.Errorf("wrapping db error %w", expectedDBErr)
+	apiErr.StatusCode = sl.ErrDBConnectionFailed.HTTPStatus()
 
-	return sl.LogNewAPIErr(sl.NewAPIErr{ // call LogNewAPIErr to log the API error to the temp file
-		APIEndpoint:   "/test/endpoint",
-		CallerID:      "caller-123",
-		InternalError: newDBErr,
-		Message:       "cannot get users by address",
-		RequestID:     "req-123",
-		StatusCode:    code,
-		UserID:        "user-123",
-	})
+	return sl.LogAPIErr(apiErr)
 }
 
 // lemonadeStandError is our custom error type for the lemonade stand API.
@@ -51,13 +45,9 @@ func wrapLibraryError() error {
 		Message:    "sorry we need 48 lemons to make lemonade",
 	}
 
-	return sl.LogNewAPIErr(sl.NewAPIErr{
-		APIEndpoint:   "/lemonade/make",
-		CallerID:      "caller-123",
-		InternalError: lse,
-		Message:       "cannot get users by address",
-		RequestID:     "req-123",
-		StatusCode:    http.StatusServiceUnavailable,
-		UserID:        "user-123",
-	})
+	apiErr := sl.GenerateNonRandomAPIError()
+	apiErr.InnerError = fmt.Errorf("wrapping db error %w", lse)
+	apiErr.StatusCode = http.StatusServiceUnavailable
+
+	return sl.LogAPIErr(apiErr)
 }

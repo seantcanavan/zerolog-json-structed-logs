@@ -84,7 +84,7 @@ func TestDBError_Error(t *testing.T) {
 		// Assume these values are what you expect to see after the operation.
 		Constraint:    "Constraint",
 		DBName:        "DBName",
-		InternalError: errors.New("InternalError"),
+		InternalError: errors.New("InnerError"),
 		Message:       "Message",
 		Operation:     "Operation",
 		Query:         "Query",
@@ -97,7 +97,7 @@ func TestDBError_Error(t *testing.T) {
 
 	errString := expectedDBErr.Error()
 
-	expectedString := "[DatabaseError] Operation operation on DBName.TableName with query: Query - Message - InternalError"
+	expectedString := "[DatabaseError] Operation operation on DBName.TableName with query: Query - Message - InnerError"
 
 	assert.Equal(t, expectedString, errString)
 }

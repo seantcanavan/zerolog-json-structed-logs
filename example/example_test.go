@@ -2,6 +2,7 @@ package example
 
 import (
 	"errors"
+	"fmt"
 	sl "github.com/seantcanavan/zerolog-json-structured-logs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,16 +22,12 @@ func TestWrapDatabaseError(t *testing.T) {
 		Type:          sl.ErrDBConnectionFailed,
 	})
 
+	apiErr := sl.GenerateNonRandomAPIError()
+	apiErr.InnerError = fmt.Errorf("wrapping db error %w", expectedDBError)
+	apiErr.StatusCode = sl.ErrDBConnectionFailed.HTTPStatus()
+
 	// Define the expected APIError
-	expectedAPIError := sl.LogNewAPIErr(sl.NewAPIErr{
-		APIEndpoint:   "/test/endpoint",
-		CallerID:      "caller-123",
-		Message:       "cannot get users by address",
-		RequestID:     "req-123",
-		InternalError: expectedDBError,
-		StatusCode:    sl.ErrDBConnectionFailed.HTTPStatus(),
-		UserID:        "user-123",
-	})
+	expectedAPIError := sl.LogAPIErr(apiErr)
 
 	// Wrap the DatabaseError in an APIError
 	wrappedAPIError := wrapDatabaseError()
@@ -40,27 +37,26 @@ func TestWrapDatabaseError(t *testing.T) {
 	require.True(t, errors.As(expectedAPIError, &unwrappedExpectedAPIError))
 
 	var unwrappedExpectedDBError *sl.DatabaseError
-	require.True(t, errors.As(unwrappedExpectedAPIError.InternalError, &unwrappedExpectedDBError))
+	require.True(t, errors.As(unwrappedExpectedAPIError.InnerError, &unwrappedExpectedDBError))
 
 	// Unwrap the error to assert on the API error
-	var apiErr *sl.APIError
-	require.True(t, errors.As(wrappedAPIError, &apiErr))
+	var unwrappedAPIErr *sl.APIError
+	require.True(t, errors.As(wrappedAPIError, &unwrappedAPIErr))
 
 	var dbErr *sl.DatabaseError
-	require.True(t, errors.As(apiErr.InternalError, &dbErr))
+	require.True(t, errors.As(unwrappedAPIErr.InnerError, &dbErr))
 
 	// Assert the properties of the APIError itself
-	assert.Equal(t, unwrappedExpectedAPIError.APIEndpoint, apiErr.APIEndpoint)
-	assert.Equal(t, unwrappedExpectedAPIError.CallerID, apiErr.CallerID)
-	assert.Equal(t, unwrappedExpectedAPIError.Message, apiErr.Message)
-	assert.Equal(t, unwrappedExpectedAPIError.RequestID, apiErr.RequestID)
-	assert.Equal(t, unwrappedExpectedAPIError.StatusCode, apiErr.StatusCode)
-	assert.Equal(t, unwrappedExpectedAPIError.StatusText, apiErr.StatusText)
-	assert.Equal(t, unwrappedExpectedAPIError.UserID, apiErr.UserID)
+	assert.Equal(t, unwrappedExpectedAPIError.Path, unwrappedAPIErr.Path)
+	assert.Equal(t, unwrappedExpectedAPIError.CallerID, unwrappedAPIErr.CallerID)
+	assert.Equal(t, unwrappedExpectedAPIError.Message, unwrappedAPIErr.Message)
+	assert.Equal(t, unwrappedExpectedAPIError.RequestID, unwrappedAPIErr.RequestID)
+	assert.Equal(t, unwrappedExpectedAPIError.StatusCode, unwrappedAPIErr.StatusCode)
+	assert.Equal(t, unwrappedExpectedAPIError.OwnerID, unwrappedAPIErr.OwnerID)
 
 	// Unwrap the internal error of the APIError to get the DatabaseError
 	var unwrappedDBErr *sl.DatabaseError
-	require.True(t, errors.As(apiErr.InternalError, &unwrappedDBErr))
+	require.True(t, errors.As(unwrappedAPIErr.InnerError, &unwrappedDBErr))
 
 	// Assert the properties of the unwrapped DatabaseError
 	assert.Equal(t, unwrappedExpectedDBError.Constraint, dbErr.Constraint)
