@@ -10,21 +10,21 @@ import (
 
 func wrapDatabaseError() error {
 	expectedDBErr := sldb.LogNewDBErr(sldb.NewDBErr{ // Call LogNewDBErr to log the DB error to the temp file
-		Constraint:    "pk_users",
-		DBName:        "testdb",
-		InternalError: errors.New("sql: no rows in result set"),
-		Message:       "connection to database failed",
-		Operation:     "SELECT",
-		Query:         "SELECT * FROM users",
-		TableName:     "users",
-		Type:          sldb.ErrDBConnectionFailed,
+		Constraint: "pk_users",
+		DBName:     "testdb",
+		InnerError: errors.New("sql: no rows in result set"),
+		Message:    "connection to database failed",
+		Operation:  "SELECT",
+		Query:      "SELECT * FROM users",
+		TableName:  "users",
+		Type:       sldb.ErrDBConnectionFailed,
 	})
 
 	apiErr := slapi.GenerateNonRandomAPIError()
 	apiErr.InnerError = fmt.Errorf("wrapping db error %w", expectedDBErr)
 	apiErr.StatusCode = sldb.ErrDBConnectionFailed.HTTPStatus()
 
-	return slapi.LogAPIErr(apiErr)
+	return slapi.LogNew(apiErr)
 }
 
 // lemonadeStandError is our custom error type for the lemonade stand API.
@@ -50,5 +50,5 @@ func wrapLibraryError() error {
 	apiErr.InnerError = fmt.Errorf("wrapping db error %w", lse)
 	apiErr.StatusCode = http.StatusServiceUnavailable
 
-	return slapi.LogAPIErr(apiErr)
+	return slapi.LogNew(apiErr)
 }

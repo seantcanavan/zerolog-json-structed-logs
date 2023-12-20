@@ -1,6 +1,7 @@
 package slapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,10 +17,10 @@ import (
 	"time"
 )
 
-var apiLogFIle *os.File // zerolog writes to this file so we can capture the output
+var apiLogFile *os.File // zerolog writes to this file so we can capture the output
 
 func setupAPIErrorFileLogger() {
-	// have to declare this here to prevent shadowing the outer apiLogFIle with :=
+	// have to declare this here to prevent shadowing the outer apiLogFile with :=
 	var err error
 
 	if _, err = os.Stat(slutil.TempFileNameAPILogs); err == nil {
@@ -33,7 +34,7 @@ func setupAPIErrorFileLogger() {
 		panic(fmt.Sprintf("Error checking for temp file existence: %s", err))
 	}
 
-	apiLogFIle, err = os.CreateTemp("", slutil.TempFileNameAPILogs)
+	apiLogFile, err = os.CreateTemp("", slutil.TempFileNameAPILogs)
 	if err != nil {
 		panic(fmt.Sprintf("err is not nil: %s", err))
 	}
@@ -45,12 +46,12 @@ func setupAPIErrorFileLogger() {
 	zerolog.TimestampFunc = slutil.StaticNowFunc
 
 	// Configure zerolog to write to the temp file so we can easily capture the output
-	log.Logger = zerolog.New(apiLogFIle).With().Timestamp().Logger()
+	log.Logger = zerolog.New(apiLogFile).With().Timestamp().Logger()
 	zerolog.DisableSampling(true)
 }
 
 func tearDownAPIFileLogger() {
-	err := os.Remove(apiLogFIle.Name())
+	err := os.Remove(apiLogFile.Name())
 	if err != nil {
 		panic(fmt.Sprintf("err is not nil: %s", err))
 	}
@@ -85,18 +86,50 @@ func TestAPIError_Error(t *testing.T) {
 	assert.Equal(t, expectedString, errString)
 }
 
-func TestLogNewAPIErr(t *testing.T) {
+func TestLogCtx(t *testing.T) {
+	setupAPIErrorFileLogger()
+	defer tearDownAPIFileLogger()
+
+	ctx := context.Background()
+
+	rawAPIError := GenerateRandomAPIError()
+
+	ctx = context.WithValue(ctx, CallerIDKey, rawAPIError.CallerID)
+	ctx = context.WithValue(ctx, CallerTypeKey, rawAPIError.CallerType)
+	ctx = context.WithValue(ctx, MethodKey, rawAPIError.Method)
+	ctx = context.WithValue(ctx, MultiParamsKey, rawAPIError.MultiParams)
+	ctx = context.WithValue(ctx, OwnerIDKey, rawAPIError.OwnerID)
+	ctx = context.WithValue(ctx, OwnerTypeKey, rawAPIError.OwnerType)
+	ctx = context.WithValue(ctx, PathKey, rawAPIError.Path)
+	ctx = context.WithValue(ctx, PathParamsKey, rawAPIError.PathParams)
+	ctx = context.WithValue(ctx, QueryParamsKey, rawAPIError.QueryParams)
+	ctx = context.WithValue(ctx, RequestIDKey, rawAPIError.RequestID)
+
+	loggedAPIError := LogCtx(ctx, rawAPIError.InnerError, "", 0)
+
+	// Make sure to sync and close the log file to ensure all log entries are written.
+	require.NoError(t, apiLogFile.Sync())
+	require.NoError(t, apiLogFile.Close())
+
+	verifyAPILogContents(t, &rawAPIError, loggedAPIError)
+}
+
+func TestLogNew(t *testing.T) {
 	setupAPIErrorFileLogger()
 	defer tearDownAPIFileLogger()
 
 	rawAPIError := GenerateRandomAPIError()
 
-	loggedAPIError := LogAPIErr(rawAPIError)
+	loggedAPIError := LogNew(rawAPIError)
 
 	// Make sure to sync and close the log file to ensure all log entries are written.
-	require.NoError(t, apiLogFIle.Sync())
-	require.NoError(t, apiLogFIle.Close())
+	require.NoError(t, apiLogFile.Sync())
+	require.NoError(t, apiLogFile.Close())
 
+	verifyAPILogContents(t, &rawAPIError, loggedAPIError)
+}
+
+func verifyAPILogContents(t *testing.T, rawAPIError *APIError, loggedAPIError error) {
 	// Use errors.As to unwrap the error and verify that loggedAPIError is of type *APIError
 	var unwrappedAPIErr *APIError
 	require.True(t, errors.As(loggedAPIError, &unwrappedAPIErr), "Error is not of type *APIError")
@@ -112,7 +145,7 @@ func TestLogNewAPIErr(t *testing.T) {
 		assert.Equal(t, rawAPIError.CallerID, unwrappedAPIErr.CallerID)
 		assert.Equal(t, rawAPIError.CallerType, unwrappedAPIErr.CallerType)
 		assert.True(t, strings.HasSuffix(unwrappedAPIErr.File, "zerolog-json-structed-logs/slapi/api_error_test.go"))
-		assert.True(t, strings.HasSuffix(unwrappedAPIErr.Function, "zerolog-json-structured-logs/slapi.TestLogNewAPIErr"))
+		assert.True(t, strings.Contains(unwrappedAPIErr.Function, "zerolog-json-structured-logs/slapi.TestLog"))
 		assert.Equal(t, DefaultAPIErrorMessage, unwrappedAPIErr.Message)
 		assert.Equal(t, rawAPIError.Method, unwrappedAPIErr.Method)
 		assert.Equal(t, rawAPIError.OwnerID, unwrappedAPIErr.OwnerID)
@@ -126,7 +159,7 @@ func TestLogNewAPIErr(t *testing.T) {
 
 	t.Run("verify that jsonLogContents is well formed", func(t *testing.T) {
 		// Read the log file's logFileJSONContents for assertion.
-		logFileJSONContents, err := os.ReadFile(apiLogFIle.Name())
+		logFileJSONContents, err := os.ReadFile(apiLogFile.Name())
 		require.NoError(t, err)
 
 		// Unmarshal logFileJSONContents into a generic map[string]any
@@ -159,7 +192,7 @@ func TestLogNewAPIErr(t *testing.T) {
 			assert.Equal(t, unwrappedAPIErr.RequestID, zeroLogJSONItem.ErrorAsJSON[RequestIDKey])
 
 			assert.Equal(t, http.StatusText(unwrappedAPIErr.StatusCode), zeroLogJSONItem.ErrorAsJSON[StatusTextKey])
-			assert.Equal(t, unwrappedAPIErr.InnerError.Error(), zeroLogJSONItem.ErrorAsJSON[InternalErrorKey]) // this is the original, top level error that DatabaseError wrapped such as a SQLError
+			assert.Equal(t, unwrappedAPIErr.InnerError.Error(), zeroLogJSONItem.ErrorAsJSON[InnerErrorKey]) // this is the original, top level error that DatabaseError wrapped such as a SQLError
 
 			// check for the zerolog standard values - this is critical for testing formats and outputs for things like time and level
 			assert.Equal(t, zerolog.ErrorLevel.String(), zeroLogJSONItem.Level)
@@ -191,7 +224,7 @@ func TestLogNewAPIErr(t *testing.T) {
 				assert.Equal(t, unwrappedAPIErr.RequestID, apiErrEntryLogValues[RequestIDKey])
 
 				assert.Equal(t, http.StatusText(unwrappedAPIErr.StatusCode), apiErrEntryLogValues[StatusTextKey])
-				assert.Equal(t, unwrappedAPIErr.InnerError.Error(), apiErrEntryLogValues[InternalErrorKey]) // this is the original, top level error that DatabaseError wrapped such as a SQLError
+				assert.Equal(t, unwrappedAPIErr.InnerError.Error(), apiErrEntryLogValues[InnerErrorKey]) // this is the original, top level error that DatabaseError wrapped such as a SQLError
 			})
 
 			t.Run("verify that struct embedding is working correctly", func(t *testing.T) {

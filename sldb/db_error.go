@@ -11,14 +11,14 @@ import (
 // DatabaseError represents an error that occurred in the database layer of the application.
 // It includes details that might be relevant for debugging database issues.
 type DatabaseError struct {
-	Constraint    string          `json:"constraint,omitempty"`
-	DBName        string          `json:"dbName,omitempty"`
-	InternalError error           `json:"internalError,omitempty"` // An internal error if it exists such as a SQL library Error
-	Message       string          `json:"message,omitempty"`
-	Operation     string          `json:"operation,omitempty"`
-	Query         string          `json:"query,omitempty"`
-	TableName     string          `json:"tableName,omitempty"`
-	Type          EnumDBErrorType `json:"type,omitempty"`
+	Constraint string          `json:"constraint,omitempty"`
+	DBName     string          `json:"dbName,omitempty"`
+	InnerError error           `json:"innerError,omitempty"` // An inner error if it exists such as a SQL library Error
+	Message    string          `json:"message,omitempty"`
+	Operation  string          `json:"operation,omitempty"`
+	Query      string          `json:"query,omitempty"`
+	TableName  string          `json:"tableName,omitempty"`
+	Type       EnumDBErrorType `json:"type,omitempty"`
 
 	slutil.ExecContext `json:"execContext,omitempty"` // Embedded struct
 }
@@ -26,25 +26,25 @@ type DatabaseError struct {
 // Error returns the string representation of the DatabaseError.
 func (e *DatabaseError) Error() string {
 	return fmt.Sprintf("[DatabaseError] %s operation on %s.%s with query: %s - %s - %v",
-		e.Operation, e.DBName, e.TableName, e.Query, e.Message, e.InternalError)
+		e.Operation, e.DBName, e.TableName, e.Query, e.Message, e.InnerError)
 }
 
 // Unwrap provides the underlying error for use with errors.Is and errors.As functions.
 func (e *DatabaseError) Unwrap() error {
-	return e.InternalError
+	return e.InnerError
 }
 
 // NewDBErr is required because we have to json.Marshal DatabaseError so execContext needs
 // to be public however we don't want users to have to provide that
 type NewDBErr struct {
-	Constraint    string          `json:"constraint,omitempty"`
-	DBName        string          `json:"dbName,omitempty"`
-	InternalError error           `json:"internalError,omitempty"` // An internal error if it exists such as a SQL library Error
-	Message       string          `json:"message,omitempty"`
-	Operation     string          `json:"operation,omitempty"`
-	Query         string          `json:"query,omitempty"`
-	TableName     string          `json:"tableName,omitempty"`
-	Type          EnumDBErrorType `json:"type,omitempty"`
+	Constraint string          `json:"constraint,omitempty"`
+	DBName     string          `json:"dbName,omitempty"`
+	InnerError error           `json:"innerError,omitempty"` // An inner error if it exists such as a SQL library Error
+	Message    string          `json:"message,omitempty"`
+	Operation  string          `json:"operation,omitempty"`
+	Query      string          `json:"query,omitempty"`
+	TableName  string          `json:"tableName,omitempty"`
+	Type       EnumDBErrorType `json:"type,omitempty"`
 }
 
 func LogNewDBErr(newDBErr NewDBErr) error {
@@ -53,14 +53,14 @@ func LogNewDBErr(newDBErr NewDBErr) error {
 	}
 
 	dbErr := DatabaseError{
-		Constraint:    newDBErr.Constraint,
-		DBName:        newDBErr.DBName,
-		InternalError: fmt.Errorf("wrapping error %w", newDBErr.InternalError),
-		Message:       newDBErr.Message,
-		Operation:     newDBErr.Operation,
-		Query:         newDBErr.Query,
-		TableName:     newDBErr.TableName,
-		Type:          newDBErr.Type,
+		Constraint: newDBErr.Constraint,
+		DBName:     newDBErr.DBName,
+		InnerError: fmt.Errorf("wrapping error %w", newDBErr.InnerError),
+		Message:    newDBErr.Message,
+		Operation:  newDBErr.Operation,
+		Query:      newDBErr.Query,
+		TableName:  newDBErr.TableName,
+		Type:       newDBErr.Type,
 
 		ExecContext: slutil.GetExecContext(),
 	}
@@ -86,8 +86,8 @@ func (e *DatabaseError) MarshalZerologObject(zle *zerolog.Event) {
 		Str("type", e.Type.String()).
 		Str("tableName", e.TableName)
 
-	if e.InternalError != nil {
-		zle.AnErr("internalError", e.InternalError)
+	if e.InnerError != nil {
+		zle.AnErr("innerError", e.InnerError)
 	}
 }
 

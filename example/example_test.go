@@ -13,14 +13,14 @@ import (
 func TestWrapDatabaseError(t *testing.T) {
 	// Define the expected DatabaseError
 	expectedDBError := sldb.LogNewDBErr(sldb.NewDBErr{
-		Constraint:    "pk_users",
-		DBName:        "testdb",
-		InternalError: errors.New("sql: no rows in result set"),
-		Message:       "connection to database failed",
-		Operation:     "SELECT",
-		Query:         "SELECT * FROM users",
-		TableName:     "users",
-		Type:          sldb.ErrDBConnectionFailed,
+		Constraint: "pk_users",
+		DBName:     "testdb",
+		InnerError: errors.New("sql: no rows in result set"),
+		Message:    "connection to database failed",
+		Operation:  "SELECT",
+		Query:      "SELECT * FROM users",
+		TableName:  "users",
+		Type:       sldb.ErrDBConnectionFailed,
 	})
 
 	apiErr := slapi.GenerateNonRandomAPIError()
@@ -28,7 +28,7 @@ func TestWrapDatabaseError(t *testing.T) {
 	apiErr.StatusCode = sldb.ErrDBConnectionFailed.HTTPStatus()
 
 	// Define the expected APIError
-	expectedAPIError := slapi.LogAPIErr(apiErr)
+	expectedAPIError := slapi.LogNew(apiErr)
 
 	// Wrap the DatabaseError in an APIError
 	wrappedAPIError := wrapDatabaseError()
@@ -55,7 +55,7 @@ func TestWrapDatabaseError(t *testing.T) {
 	assert.Equal(t, unwrappedExpectedAPIError.StatusCode, unwrappedAPIErr.StatusCode)
 	assert.Equal(t, unwrappedExpectedAPIError.OwnerID, unwrappedAPIErr.OwnerID)
 
-	// Unwrap the internal error of the APIError to get the DatabaseError
+	// Unwrap the inner error of the APIError to get the DatabaseError
 	var unwrappedDBErr *sldb.DatabaseError
 	require.True(t, errors.As(unwrappedAPIErr.InnerError, &unwrappedDBErr))
 

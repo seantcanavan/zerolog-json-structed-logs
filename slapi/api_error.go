@@ -14,7 +14,7 @@ const CallerIDKey = "callerId"
 const CallerTypeKey = "callerType"
 const FileKey = "file"
 const FunctionKey = "function"
-const InternalErrorKey = "internalError"
+const InnerErrorKey = "innerError"
 const LineKey = "line"
 const MessageKey = "message"
 const MethodKey = "method"
@@ -36,7 +36,7 @@ const DefaultAPIErrorStatusCode = http.StatusInternalServerError
 type APIError struct {
 	CallerID    string              `json:"callerId,omitempty"`
 	CallerType  string              `json:"callerType,omitempty"`
-	InnerError  error               `json:"innerError,omitempty"` // An internal error if it exists such as twilio.SendSMS or other integrations
+	InnerError  error               `json:"innerError,omitempty"` // An inner error if it exists such as twilio.SendSMS or other integrations
 	Message     string              `json:"message,omitempty"`
 	Method      string              `json:"method,omitempty"`
 	MultiParams map[string][]string `json:"multiParams,omitempty"`
@@ -75,7 +75,7 @@ func addDefaults(apiErr *APIError) {
 	}
 }
 
-func LogAPIErrCtx(ctx context.Context, err error, message string, statusCode int) error {
+func LogCtx(ctx context.Context, err error, message string, statusCode int) error {
 	apiErr := APIError{
 		CallerID:    slutil.FromCtxSafe[string](ctx, CallerIDKey),
 		CallerType:  slutil.FromCtxSafe[string](ctx, CallerTypeKey),
@@ -90,7 +90,7 @@ func LogAPIErrCtx(ctx context.Context, err error, message string, statusCode int
 		QueryParams: slutil.FromCtxSafe[map[string]string](ctx, QueryParamsKey),
 		RequestID:   slutil.FromCtxSafe[string](ctx, RequestIDKey),
 		StatusCode:  statusCode,
-		ExecContext: slutil.ExecContext{},
+		ExecContext: slutil.GetExecContext(),
 	}
 
 	addDefaults(&apiErr)
@@ -102,7 +102,7 @@ func LogAPIErrCtx(ctx context.Context, err error, message string, statusCode int
 	return &apiErr
 }
 
-func LogAPIErr(apiErr APIError) error {
+func LogNew(apiErr APIError) error {
 	addDefaults(&apiErr)
 
 	apiErr.ExecContext = slutil.GetExecContext()
@@ -135,7 +135,7 @@ func (e *APIError) MarshalZerologObject(zle *zerolog.Event) {
 		Str(StatusTextKey, http.StatusText(e.StatusCode))
 
 	if e.InnerError != nil {
-		zle.AnErr(InternalErrorKey, e.InnerError)
+		zle.AnErr(InnerErrorKey, e.InnerError)
 	}
 }
 
