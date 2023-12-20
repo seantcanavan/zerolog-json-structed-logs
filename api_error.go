@@ -28,6 +28,7 @@ const StatusCodeKey = "statusCode"
 const StatusTextKey = "statusText"
 
 const DefaultAPIErrorMessage = "an API Error occurred"
+const DefaultAPIErrorStatusCode = http.StatusInternalServerError
 
 // APIError represents an error that occurred in the API layer of the application.
 // It includes details like the HTTP status code and additional context.
@@ -65,7 +66,7 @@ func addDefaults(apiErr *APIError) {
 	}
 
 	if apiErr.StatusCode == 0 {
-		apiErr.StatusCode = http.StatusInternalServerError
+		apiErr.StatusCode = DefaultAPIErrorStatusCode
 	}
 
 	if apiErr.InnerError == nil {

@@ -99,17 +99,26 @@ func TestLogNewAPIErr(t *testing.T) {
 	require.True(t, errors.As(loggedAPIError, &unwrappedAPIErr), "Error is not of type *APIError")
 
 	t.Run("verify unwrappedAPIErr has all of its fields set correctly", func(t *testing.T) {
-		assert.Equal(t, http.StatusInternalServerError, unwrappedAPIErr.StatusCode)
-		assert.Equal(t, rawAPIError.CallerID, unwrappedAPIErr.CallerID)
-		assert.Equal(t, rawAPIError.InnerError, unwrappedAPIErr.InnerError)
-		assert.Equal(t, DefaultAPIErrorMessage, unwrappedAPIErr.Message)
-		assert.Equal(t, rawAPIError.OwnerID, unwrappedAPIErr.OwnerID)
-		assert.Equal(t, rawAPIError.Path, unwrappedAPIErr.Path)
-		assert.Equal(t, rawAPIError.RequestID, unwrappedAPIErr.RequestID)
-		assert.EqualError(t, rawAPIError.InnerError, unwrappedAPIErr.InnerError.Error())
 		assert.NotEqual(t, rawAPIError.Line, unwrappedAPIErr.Line) // these are called on different line numbers so should be different
+		assert.Equal(t, DefaultAPIErrorStatusCode, unwrappedAPIErr.StatusCode)
+
+		assert.Equal(t, rawAPIError.MultiParams, unwrappedAPIErr.MultiParams)
+		assert.Equal(t, rawAPIError.PathParams, unwrappedAPIErr.PathParams)
+		assert.Equal(t, rawAPIError.QueryParams, unwrappedAPIErr.QueryParams)
+
+		assert.Equal(t, rawAPIError.CallerID, unwrappedAPIErr.CallerID)
+		assert.Equal(t, rawAPIError.CallerType, unwrappedAPIErr.CallerType)
 		assert.True(t, strings.HasSuffix(unwrappedAPIErr.File, "zerolog-json-structed-logs/api_error_test.go"))
 		assert.True(t, strings.HasSuffix(unwrappedAPIErr.Function, "zerolog-json-structured-logs.TestLogNewAPIErr"))
+		assert.Equal(t, DefaultAPIErrorMessage, unwrappedAPIErr.Message)
+		assert.Equal(t, rawAPIError.Method, unwrappedAPIErr.Method)
+		assert.Equal(t, rawAPIError.OwnerID, unwrappedAPIErr.OwnerID)
+		assert.Equal(t, rawAPIError.OwnerType, unwrappedAPIErr.OwnerType)
+		assert.Equal(t, rawAPIError.Path, unwrappedAPIErr.Path)
+		assert.Equal(t, rawAPIError.RequestID, unwrappedAPIErr.RequestID)
+
+		assert.Equal(t, rawAPIError.InnerError, unwrappedAPIErr.InnerError)
+		assert.EqualError(t, rawAPIError.InnerError, unwrappedAPIErr.InnerError.Error())
 	})
 
 	t.Run("verify that jsonLogContents is well formed", func(t *testing.T) {
