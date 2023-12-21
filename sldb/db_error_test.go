@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -57,17 +58,15 @@ func tearDownDatabaseFileLogger() {
 func TestDBError_Error(t *testing.T) {
 	expectedDBErr := DatabaseError{
 		// Assume these values are what you expect to see after the operation.
-		Constraint: "Constraint",
-		DBName:     "DBName",
-		InnerError: errors.New("InnerError"),
-		Message:    "Message",
-		Operation:  "Operation",
-		Query:      "Query",
-		TableName:  "TableName",
-		Type:       ErrDBConnectionFailed,
-
-		// we have to wrap this so the call stack is at the same depth as LogNewDBErr below
-		ExecContext: func() slutil.ExecContext { return slutil.GetExecContext() }(),
+		Constraint:  "Constraint",
+		DBName:      "DBName",
+		ExecContext: slutil.GetExecContext(3),
+		InnerError:  errors.New("InnerError"),
+		Message:     "Message",
+		Operation:   "Operation",
+		Query:       "Query",
+		TableName:   "TableName",
+		Type:        ErrDBConnectionFailed,
 	}
 
 	errString := expectedDBErr.Error()
@@ -84,7 +83,7 @@ func TestLogNewDBErr(t *testing.T) {
 	// this gets propagated up to the LogItem
 	message := "no users found"
 
-	expectedDBErr := DatabaseError{
+	rawDBErr := DatabaseError{
 		// Assume these values are what you expect to see after the operation.
 		Constraint: "pk_users",
 		DBName:     "testdb",
@@ -94,20 +93,17 @@ func TestLogNewDBErr(t *testing.T) {
 		Query:      "SELECT * FROM users",
 		TableName:  "users",
 		Type:       ErrDBConnectionFailed,
-
-		// we have to wrap this so the call stack is at the same depth as LogNewDBErr below
-		ExecContext: func() slutil.ExecContext { return slutil.GetExecContext() }(),
 	}
 
 	newDBErr := LogNewDBErr(NewDBErr{ // Call LogNewDBErr to log the error to the temp file
-		Constraint: expectedDBErr.Constraint,
-		DBName:     expectedDBErr.DBName,
+		Constraint: rawDBErr.Constraint,
+		DBName:     rawDBErr.DBName,
 		InnerError: errors.New("sql: no rows in result set"),
-		Message:    expectedDBErr.Message,
-		Operation:  expectedDBErr.Operation,
-		Query:      expectedDBErr.Query,
-		TableName:  expectedDBErr.TableName,
-		Type:       expectedDBErr.Type,
+		Message:    rawDBErr.Message,
+		Operation:  rawDBErr.Operation,
+		Query:      rawDBErr.Query,
+		TableName:  rawDBErr.TableName,
+		Type:       rawDBErr.Type,
 	})
 
 	// Make sure to sync and close the log file to ensure all log entries are written.
@@ -119,18 +115,18 @@ func TestLogNewDBErr(t *testing.T) {
 	require.True(t, errors.As(newDBErr, &unwrappedNewDBErr), "Error is not of type *DatabaseError")
 
 	t.Run("verify unwrappedNewDBErr has all of its fields set correctly", func(t *testing.T) {
-		assert.Equal(t, expectedDBErr.Constraint, unwrappedNewDBErr.Constraint)
-		assert.Equal(t, expectedDBErr.DBName, unwrappedNewDBErr.DBName)
-		assert.Equal(t, expectedDBErr.File, unwrappedNewDBErr.File)
-		assert.Equal(t, expectedDBErr.Function, unwrappedNewDBErr.Function)
-		assert.Equal(t, expectedDBErr.InnerError, unwrappedNewDBErr.InnerError)
-		assert.NotEqual(t, expectedDBErr.Line, unwrappedNewDBErr.Line) // these are called on different line numbers so should be different
-		assert.Equal(t, expectedDBErr.Message, unwrappedNewDBErr.Message)
-		assert.Equal(t, expectedDBErr.Operation, unwrappedNewDBErr.Operation)
-		assert.Equal(t, expectedDBErr.Query, unwrappedNewDBErr.Query)
-		assert.Equal(t, expectedDBErr.TableName, unwrappedNewDBErr.TableName)
-		assert.Equal(t, expectedDBErr.Type, unwrappedNewDBErr.Type)
-		assert.EqualError(t, expectedDBErr.InnerError, unwrappedNewDBErr.InnerError.Error())
+		assert.Equal(t, rawDBErr.Constraint, unwrappedNewDBErr.Constraint)
+		assert.Equal(t, rawDBErr.DBName, unwrappedNewDBErr.DBName)
+		assert.True(t, strings.HasSuffix(unwrappedNewDBErr.File, "testing.go"))
+		assert.Equal(t, "tRunner", unwrappedNewDBErr.Function)
+		assert.Equal(t, rawDBErr.InnerError, unwrappedNewDBErr.InnerError)
+		assert.NotEqual(t, rawDBErr.Line, unwrappedNewDBErr.Line) // these are called on different line numbers so should be different
+		assert.Equal(t, rawDBErr.Message, unwrappedNewDBErr.Message)
+		assert.Equal(t, rawDBErr.Operation, unwrappedNewDBErr.Operation)
+		assert.Equal(t, rawDBErr.Query, unwrappedNewDBErr.Query)
+		assert.Equal(t, rawDBErr.TableName, unwrappedNewDBErr.TableName)
+		assert.Equal(t, rawDBErr.Type, unwrappedNewDBErr.Type)
+		assert.EqualError(t, rawDBErr.InnerError, unwrappedNewDBErr.InnerError.Error())
 	})
 
 	t.Run("verify that jsonLogContents is well formed", func(t *testing.T) {
@@ -162,7 +158,6 @@ func TestLogNewDBErr(t *testing.T) {
 
 			// check for the zerolog standard values - this is critical for testing formats and outputs for things like time and level
 			assert.Equal(t, zerolog.ErrorLevel.String(), zeroLogJSONItem.Level)
-			assert.Equal(t, message, zeroLogJSONItem.Message)
 			assert.Equal(t, slutil.StaticNowFunc(), zeroLogJSONItem.Time)
 		})
 

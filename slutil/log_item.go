@@ -11,6 +11,5 @@ const TempFileNameAPILogs = "testapilogs"
 type ZLJSONItem struct {
 	ErrorAsJSON map[string]any `json:"sl,omitempty"`
 	Level       string         `json:"level,omitempty"`
-	Message     string         `json:"message,omitempty"`
 	Time        time.Time      `json:"time,omitempty"`
 }

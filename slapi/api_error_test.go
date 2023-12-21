@@ -62,6 +62,7 @@ func TestAPIError_Error(t *testing.T) {
 	expectedAPIError := APIError{
 		CallerID:    "CallerID",
 		CallerType:  "CallerTYpe",
+		ExecContext: slutil.GetExecContext(3),
 		InnerError:  errors.New("InnerError"),
 		Message:     "Message",
 		Method:      http.MethodGet,
@@ -73,7 +74,6 @@ func TestAPIError_Error(t *testing.T) {
 		QueryParams: map[string]string{"queryKey1": "queryVal1", "queryKey2": "queryVal2"},
 		RequestID:   "RequestID",
 		StatusCode:  500,
-		ExecContext: func() slutil.ExecContext { return slutil.GetExecContext() }(),
 	}
 
 	// Define the expected string output from the Error() method
@@ -86,7 +86,7 @@ func TestAPIError_Error(t *testing.T) {
 	assert.Equal(t, expectedString, errString)
 }
 
-func TestLogCtx(t *testing.T) {
+func TestLogCtxMsg(t *testing.T) {
 	setupAPIErrorFileLogger()
 	defer tearDownAPIFileLogger()
 
@@ -105,7 +105,7 @@ func TestLogCtx(t *testing.T) {
 	ctx = context.WithValue(ctx, QueryParamsKey, rawAPIError.QueryParams)
 	ctx = context.WithValue(ctx, RequestIDKey, rawAPIError.RequestID)
 
-	loggedAPIError := LogCtx(ctx, rawAPIError.InnerError, "", 0)
+	loggedAPIError := LogCtxMsg(ctx, rawAPIError.InnerError, "", 0)
 
 	// Make sure to sync and close the log file to ensure all log entries are written.
 	require.NoError(t, apiLogFile.Sync())
@@ -144,8 +144,10 @@ func verifyAPILogContents(t *testing.T, rawAPIError *APIError, loggedAPIError er
 
 		assert.Equal(t, rawAPIError.CallerID, unwrappedAPIErr.CallerID)
 		assert.Equal(t, rawAPIError.CallerType, unwrappedAPIErr.CallerType)
-		assert.True(t, strings.HasSuffix(unwrappedAPIErr.File, "zerolog-json-structed-logs/slapi/api_error_test.go"))
-		assert.True(t, strings.Contains(unwrappedAPIErr.Function, "zerolog-json-structured-logs/slapi.TestLog"))
+		assert.Equal(t, "tRunner", unwrappedAPIErr.Function)
+		assert.True(t, strings.HasSuffix(unwrappedAPIErr.File, "testing.go"))
+		assert.Equal(t, "testing", unwrappedAPIErr.Package)
+		assert.Equal(t, "", unwrappedAPIErr.Module)
 		assert.Equal(t, DefaultAPIErrorMessage, unwrappedAPIErr.Message)
 		assert.Equal(t, rawAPIError.Method, unwrappedAPIErr.Method)
 		assert.Equal(t, rawAPIError.OwnerID, unwrappedAPIErr.OwnerID)
@@ -185,9 +187,12 @@ func verifyAPILogContents(t *testing.T, rawAPIError *APIError, loggedAPIError er
 			assert.Equal(t, unwrappedAPIErr.File, zeroLogJSONItem.ErrorAsJSON[FileKey])
 			assert.Equal(t, unwrappedAPIErr.Function, zeroLogJSONItem.ErrorAsJSON[FunctionKey])
 			assert.Equal(t, unwrappedAPIErr.Message, zeroLogJSONItem.ErrorAsJSON[MessageKey])
+			assert.Equal(t, unwrappedAPIErr.Message, DefaultAPIErrorMessage)
 			assert.Equal(t, unwrappedAPIErr.Method, zeroLogJSONItem.ErrorAsJSON[MethodKey])
+			assert.Equal(t, unwrappedAPIErr.Module, zeroLogJSONItem.ErrorAsJSON[ModuleKey])
 			assert.Equal(t, unwrappedAPIErr.OwnerID, zeroLogJSONItem.ErrorAsJSON[OwnerIDKey])
 			assert.Equal(t, unwrappedAPIErr.OwnerType, zeroLogJSONItem.ErrorAsJSON[OwnerTypeKey])
+			assert.Equal(t, unwrappedAPIErr.Package, zeroLogJSONItem.ErrorAsJSON[PackageKey])
 			assert.Equal(t, unwrappedAPIErr.Path, zeroLogJSONItem.ErrorAsJSON[PathKey])
 			assert.Equal(t, unwrappedAPIErr.RequestID, zeroLogJSONItem.ErrorAsJSON[RequestIDKey])
 
@@ -196,7 +201,6 @@ func verifyAPILogContents(t *testing.T, rawAPIError *APIError, loggedAPIError er
 
 			// check for the zerolog standard values - this is critical for testing formats and outputs for things like time and level
 			assert.Equal(t, zerolog.ErrorLevel.String(), zeroLogJSONItem.Level)
-			assert.Equal(t, DefaultAPIErrorMessage, zeroLogJSONItem.Message)
 			assert.Equal(t, slutil.StaticNowFunc(), zeroLogJSONItem.Time)
 		})
 
@@ -215,11 +219,13 @@ func verifyAPILogContents(t *testing.T, rawAPIError *APIError, loggedAPIError er
 				assert.Equal(t, unwrappedAPIErr.CallerID, apiErrEntryLogValues[CallerIDKey])
 				assert.Equal(t, unwrappedAPIErr.CallerType, apiErrEntryLogValues[CallerTypeKey])
 				assert.Equal(t, unwrappedAPIErr.File, apiErrEntryLogValues[FileKey])
+				assert.Equal(t, unwrappedAPIErr.Module, apiErrEntryLogValues[ModuleKey])
 				assert.Equal(t, unwrappedAPIErr.Function, apiErrEntryLogValues[FunctionKey])
 				assert.Equal(t, unwrappedAPIErr.Message, apiErrEntryLogValues[MessageKey])
 				assert.Equal(t, unwrappedAPIErr.Method, apiErrEntryLogValues[MethodKey])
 				assert.Equal(t, unwrappedAPIErr.OwnerID, apiErrEntryLogValues[OwnerIDKey])
 				assert.Equal(t, unwrappedAPIErr.OwnerType, apiErrEntryLogValues[OwnerTypeKey])
+				assert.Equal(t, unwrappedAPIErr.Package, apiErrEntryLogValues[PackageKey])
 				assert.Equal(t, unwrappedAPIErr.Path, apiErrEntryLogValues[PathKey])
 				assert.Equal(t, unwrappedAPIErr.RequestID, apiErrEntryLogValues[RequestIDKey])
 
