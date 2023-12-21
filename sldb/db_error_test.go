@@ -60,7 +60,7 @@ func TestDBError_Error(t *testing.T) {
 		// Assume these values are what you expect to see after the operation.
 		Constraint:  "Constraint",
 		DBName:      "DBName",
-		ExecContext: slutil.GetExecContext(2),
+		ExecContext: slutil.GetExecContext(3),
 		InnerError:  errors.New("InnerError"),
 		Message:     "Message",
 		Operation:   "Operation",
@@ -117,8 +117,8 @@ func TestLogNewDBErr(t *testing.T) {
 	t.Run("verify unwrappedNewDBErr has all of its fields set correctly", func(t *testing.T) {
 		assert.Equal(t, rawDBErr.Constraint, unwrappedNewDBErr.Constraint)
 		assert.Equal(t, rawDBErr.DBName, unwrappedNewDBErr.DBName)
-		assert.True(t, strings.HasSuffix(unwrappedNewDBErr.File, "db_error_test.go"))
-		assert.Equal(t, "TestLogNewDBErr", unwrappedNewDBErr.Function)
+		assert.True(t, strings.HasSuffix(unwrappedNewDBErr.File, "testing.go"))
+		assert.Equal(t, "tRunner", unwrappedNewDBErr.Function)
 		assert.Equal(t, rawDBErr.InnerError, unwrappedNewDBErr.InnerError)
 		assert.NotEqual(t, rawDBErr.Line, unwrappedNewDBErr.Line) // these are called on different line numbers so should be different
 		assert.Equal(t, rawDBErr.Message, unwrappedNewDBErr.Message)

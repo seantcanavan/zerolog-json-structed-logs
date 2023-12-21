@@ -97,7 +97,7 @@ func LogCtxMsg(ctx context.Context, err error, message string, statusCode int) e
 	apiErr := APIError{
 		CallerID:    slutil.FromCtxSafe[string](ctx, CallerIDKey),
 		CallerType:  slutil.FromCtxSafe[string](ctx, CallerTypeKey),
-		ExecContext: slutil.GetExecContext(2),
+		ExecContext: slutil.GetExecContext(3),
 		InnerError:  err,
 		Message:     message,
 		Method:      slutil.FromCtxSafe[string](ctx, MethodKey),
@@ -120,7 +120,7 @@ func LogCtxMsg(ctx context.Context, err error, message string, statusCode int) e
 
 func LogNew(apiErr APIError) error {
 	addDefaults(&apiErr)
-	apiErr.ExecContext = slutil.GetExecContext(2)
+	apiErr.ExecContext = slutil.GetExecContext(3)
 
 	log.Error().Object(slutil.ZLObjectKey, &apiErr).Send()
 
@@ -129,7 +129,7 @@ func LogNew(apiErr APIError) error {
 
 func New(apiErr APIError) error {
 	addDefaults(&apiErr)
-	apiErr.ExecContext = slutil.GetExecContext(2)
+	apiErr.ExecContext = slutil.GetExecContext(3)
 
 	return &apiErr
 }
@@ -206,7 +206,7 @@ func GenerateNonRandomAPIError() APIError {
 	return APIError{
 		CallerID:    "CallerID",
 		CallerType:  "CallerTYpe",
-		ExecContext: slutil.GetExecContext(2),
+		ExecContext: slutil.GetExecContext(3),
 		InnerError:  errors.New("InnerError"),
 		Message:     "Message",
 		Method:      http.MethodGet,

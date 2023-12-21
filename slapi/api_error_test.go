@@ -62,7 +62,7 @@ func TestAPIError_Error(t *testing.T) {
 	expectedAPIError := APIError{
 		CallerID:    "CallerID",
 		CallerType:  "CallerTYpe",
-		ExecContext: slutil.GetExecContext(2),
+		ExecContext: slutil.GetExecContext(3),
 		InnerError:  errors.New("InnerError"),
 		Message:     "Message",
 		Method:      http.MethodGet,
@@ -144,10 +144,10 @@ func verifyAPILogContents(t *testing.T, rawAPIError *APIError, loggedAPIError er
 
 		assert.Equal(t, rawAPIError.CallerID, unwrappedAPIErr.CallerID)
 		assert.Equal(t, rawAPIError.CallerType, unwrappedAPIErr.CallerType)
-		assert.True(t, strings.Contains(unwrappedAPIErr.Function, "TestLog"))
-		assert.True(t, strings.HasSuffix(unwrappedAPIErr.File, "zerolog-json-structed-logs/slapi/api_error_test.go"))
-		assert.Equal(t, "slapi", unwrappedAPIErr.Package)
-		assert.Equal(t, "github.com/seantcanavan/zerolog-json-structured-logs", unwrappedAPIErr.Module)
+		assert.Equal(t, "tRunner", unwrappedAPIErr.Function)
+		assert.True(t, strings.HasSuffix(unwrappedAPIErr.File, "testing.go"))
+		assert.Equal(t, "testing", unwrappedAPIErr.Package)
+		assert.Equal(t, "", unwrappedAPIErr.Module)
 		assert.Equal(t, DefaultAPIErrorMessage, unwrappedAPIErr.Message)
 		assert.Equal(t, rawAPIError.Method, unwrappedAPIErr.Method)
 		assert.Equal(t, rawAPIError.OwnerID, unwrappedAPIErr.OwnerID)
