@@ -14,7 +14,7 @@ type ExecContext struct {
 }
 
 func GetExecContext(caller int) ExecContext {
-	pc, file, line, ok := runtime.Caller(caller)
+	pc, fileName, lineNumber, ok := runtime.Caller(caller)
 	if !ok {
 		return ExecContext{}
 	}
@@ -38,13 +38,13 @@ func GetExecContext(caller int) ExecContext {
 	functionName := pkgFunc[1]
 
 	// Rejoin the remaining parts to form the module name
-	moduleName := strings.Join(parts[:len(parts)-1], "/")
+	noduleName := strings.Join(parts[:len(parts)-1], "/")
 
 	return ExecContext{
-		File:     file,
+		File:     fileName,
 		Function: functionName,
-		Line:     line,
-		Module:   moduleName,
+		Line:     lineNumber,
+		Module:   noduleName,
 		Package:  packageName,
 	}
 }
