@@ -75,7 +75,23 @@ func addDefaults(apiErr *APIError) {
 	}
 }
 
-func LogCtx(ctx context.Context, err error, message string, statusCode int) error {
+func LogCtxInternal(ctx context.Context, err error, statusCode int) error {
+	return LogCtxMsg(ctx, err, slutil.PrettyErrMsgInternal(), statusCode)
+}
+
+func LogCtxInternalF(ctx context.Context, err error, statusCode int, extra any) error {
+	return LogCtxMsg(ctx, err, slutil.PrettyErrMsgInternalF(extra), statusCode)
+}
+
+func LogCtxF(ctx context.Context, err error, calleePkg, calleeFn string, statusCode int, extra any) error {
+	return LogCtxMsg(ctx, err, slutil.PrettyErrMsgF(calleePkg, calleeFn, extra), statusCode)
+}
+
+func LogCtx(ctx context.Context, err error, calleePkg, calleeFn string, statusCode int) error {
+	return LogCtxMsg(ctx, err, slutil.PrettyErrMsg(calleePkg, calleeFn), statusCode)
+}
+
+func LogCtxMsg(ctx context.Context, err error, message string, statusCode int) error {
 	apiErr := APIError{
 		CallerID:    slutil.FromCtxSafe[string](ctx, CallerIDKey),
 		CallerType:  slutil.FromCtxSafe[string](ctx, CallerTypeKey),

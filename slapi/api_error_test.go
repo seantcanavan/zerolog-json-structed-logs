@@ -86,7 +86,7 @@ func TestAPIError_Error(t *testing.T) {
 	assert.Equal(t, expectedString, errString)
 }
 
-func TestLogCtx(t *testing.T) {
+func TestLogCtxMsg(t *testing.T) {
 	setupAPIErrorFileLogger()
 	defer tearDownAPIFileLogger()
 
@@ -105,7 +105,7 @@ func TestLogCtx(t *testing.T) {
 	ctx = context.WithValue(ctx, QueryParamsKey, rawAPIError.QueryParams)
 	ctx = context.WithValue(ctx, RequestIDKey, rawAPIError.RequestID)
 
-	loggedAPIError := LogCtx(ctx, rawAPIError.InnerError, "", 0)
+	loggedAPIError := LogCtxMsg(ctx, rawAPIError.InnerError, "", 0)
 
 	// Make sure to sync and close the log file to ensure all log entries are written.
 	require.NoError(t, apiLogFile.Sync())
