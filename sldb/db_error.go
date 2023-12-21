@@ -53,16 +53,15 @@ func LogNewDBErr(newDBErr NewDBErr) error {
 	}
 
 	dbErr := DatabaseError{
-		Constraint: newDBErr.Constraint,
-		DBName:     newDBErr.DBName,
-		InnerError: fmt.Errorf("wrapping error %w", newDBErr.InnerError),
-		Message:    newDBErr.Message,
-		Operation:  newDBErr.Operation,
-		Query:      newDBErr.Query,
-		TableName:  newDBErr.TableName,
-		Type:       newDBErr.Type,
-
-		ExecContext: slutil.GetExecContext(),
+		Constraint:  newDBErr.Constraint,
+		DBName:      newDBErr.DBName,
+		ExecContext: slutil.GetExecContext(2),
+		InnerError:  fmt.Errorf("wrapping error %w", newDBErr.InnerError),
+		Message:     newDBErr.Message,
+		Operation:   newDBErr.Operation,
+		Query:       newDBErr.Query,
+		TableName:   newDBErr.TableName,
+		Type:        newDBErr.Type,
 	}
 
 	log.Error().

@@ -18,9 +18,11 @@ const InnerErrorKey = "innerError"
 const LineKey = "line"
 const MessageKey = "message"
 const MethodKey = "method"
+const ModuleKey = "module"
 const MultiParamsKey = "multiParams"
 const OwnerIDKey = "ownerId"
 const OwnerTypeKey = "ownerType"
+const PackageKey = "package"
 const PathKey = "path"
 const PathParamsKey = "pathParams"
 const QueryParamsKey = "queryParams"
@@ -34,19 +36,19 @@ const DefaultAPIErrorStatusCode = http.StatusInternalServerError
 // APIError represents an error that occurred in the API layer of the application.
 // It includes details like the HTTP status code and additional context.
 type APIError struct {
-	CallerID    string              `json:"callerId,omitempty"`
-	CallerType  string              `json:"callerType,omitempty"`
-	InnerError  error               `json:"innerError,omitempty"` // An inner error if it exists such as twilio.SendSMS or other integrations
-	Message     string              `json:"message,omitempty"`
-	Method      string              `json:"method,omitempty"`
-	MultiParams map[string][]string `json:"multiParams,omitempty"`
-	OwnerID     string              `json:"ownerId,omitempty"`
-	OwnerType   string              `json:"ownerType,omitempty"`
-	Path        string              `json:"path,omitempty"`
-	PathParams  map[string]string   `json:"pathParams,omitempty"`
-	QueryParams map[string]string   `json:"queryParams,omitempty"`
-	RequestID   string              `json:"requestId,omitempty"`
-	StatusCode  int                 `json:"statusCode,omitempty"`
+	CallerID    string
+	CallerType  string
+	InnerError  error // An inner error if it exists such as twilio.SendSMS or other integrations
+	Message     string
+	Method      string
+	MultiParams map[string][]string
+	OwnerID     string
+	OwnerType   string
+	Path        string
+	PathParams  map[string]string
+	QueryParams map[string]string
+	RequestID   string
+	StatusCode  int
 
 	slutil.ExecContext `json:"execContext"` // Embedded struct
 }
@@ -95,6 +97,7 @@ func LogCtxMsg(ctx context.Context, err error, message string, statusCode int) e
 	apiErr := APIError{
 		CallerID:    slutil.FromCtxSafe[string](ctx, CallerIDKey),
 		CallerType:  slutil.FromCtxSafe[string](ctx, CallerTypeKey),
+		ExecContext: slutil.GetExecContext(2),
 		InnerError:  err,
 		Message:     message,
 		Method:      slutil.FromCtxSafe[string](ctx, MethodKey),
@@ -106,32 +109,27 @@ func LogCtxMsg(ctx context.Context, err error, message string, statusCode int) e
 		QueryParams: slutil.FromCtxSafe[map[string]string](ctx, QueryParamsKey),
 		RequestID:   slutil.FromCtxSafe[string](ctx, RequestIDKey),
 		StatusCode:  statusCode,
-		ExecContext: slutil.GetExecContext(),
 	}
 
 	addDefaults(&apiErr)
 
-	log.Error().
-		Object(slutil.ZLObjectKey, &apiErr).
-		Msg(apiErr.Message)
+	log.Error().Object(slutil.ZLObjectKey, &apiErr).Send()
 
 	return &apiErr
 }
 
 func LogNew(apiErr APIError) error {
 	addDefaults(&apiErr)
-	apiErr.ExecContext = slutil.GetExecContext()
+	apiErr.ExecContext = slutil.GetExecContext(2)
 
-	log.Error().
-		Object(slutil.ZLObjectKey, &apiErr).
-		Msg(apiErr.Message)
+	log.Error().Object(slutil.ZLObjectKey, &apiErr).Send()
 
 	return &apiErr
 }
 
 func New(apiErr APIError) error {
 	addDefaults(&apiErr)
-	apiErr.ExecContext = slutil.GetExecContext()
+	apiErr.ExecContext = slutil.GetExecContext(2)
 
 	return &apiErr
 }
@@ -150,8 +148,10 @@ func (e *APIError) MarshalZerologObject(zle *zerolog.Event) {
 		Str(FunctionKey, e.Function).
 		Str(MessageKey, e.Message).
 		Str(MethodKey, e.Method).
+		Str(ModuleKey, e.Module).
 		Str(OwnerIDKey, e.OwnerID).
 		Str(OwnerTypeKey, e.OwnerType).
+		Str(PackageKey, e.Package).
 		Str(PathKey, e.Path).
 		Str(RequestIDKey, e.RequestID).
 		Str(StatusTextKey, http.StatusText(e.StatusCode))
@@ -206,6 +206,7 @@ func GenerateNonRandomAPIError() APIError {
 	return APIError{
 		CallerID:    "CallerID",
 		CallerType:  "CallerTYpe",
+		ExecContext: slutil.GetExecContext(2),
 		InnerError:  errors.New("InnerError"),
 		Message:     "Message",
 		Method:      http.MethodGet,
@@ -217,6 +218,5 @@ func GenerateNonRandomAPIError() APIError {
 		QueryParams: map[string]string{"queryKey1": "queryVal1", "queryKey2": "queryVal2"},
 		RequestID:   "RequestID",
 		StatusCode:  500,
-		ExecContext: func() slutil.ExecContext { return slutil.GetExecContext() }(),
 	}
 }
